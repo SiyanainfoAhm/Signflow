@@ -135,20 +135,30 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
   }, [pdfUrl, currentPage, zoom]);
 
   const handleDownload = async () => {
-    // Always regenerate before download to ensure latest data
-    if (!pdfUrl || isOutdated) {
-      await generatePdf();
-      // Wait a bit for PDF to be ready
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    try {
+      // Always regenerate before download to ensure latest data
+      if (!pdfUrl || isOutdated) {
+        await generatePdf();
+        // Wait a bit for PDF to be ready
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
-    if (pdfUrl) {
-      const link = document.createElement('a');
-      link.href = pdfUrl;
-      link.download = `training-evaluation-form-${role}-${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (pdfUrl) {
+        const link = document.createElement('a');
+        link.href = pdfUrl;
+        link.download = `training-evaluation-form-${role}-${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Show success toast
+        const { toast } = await import('../../utils/toast');
+        toast.success('PDF Exported & Downloaded Successfully! 🎉', 5000);
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      const { toast } = await import('../../utils/toast');
+      toast.error('Failed to download PDF. Please try again.', 4000);
     }
   };
 

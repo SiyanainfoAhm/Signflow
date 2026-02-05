@@ -254,12 +254,24 @@ export const FormWizardPage: React.FC = () => {
     return Object.keys(stepErrors).length === 0;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (validateStep(currentStep)) {
       if (currentStep < wizardSteps.length) {
         setCurrentStep(currentStep + 1);
         setErrors({});
         window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (currentStep === wizardSteps.length) {
+        // Last step - export PDF
+        try {
+          const { exportPdf } = await import('../utils/pdfExport');
+          const { toast } = await import('../utils/toast');
+          await exportPdf(role);
+          toast.success('PDF Exported & Downloaded Successfully! 🎉', 5000);
+        } catch (error) {
+          console.error('Error exporting PDF:', error);
+          const { toast } = await import('../utils/toast');
+          toast.error('Failed to export PDF. Please try again.', 4000);
+        }
       }
     }
   };
