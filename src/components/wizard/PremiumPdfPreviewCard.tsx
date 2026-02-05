@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { PdfDocument } from '../pdf/PdfDocument';
 import { useFormStore } from '../../store/formStore';
@@ -29,11 +29,18 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [isOutdated, setIsOutdated] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastGeneratedRef = useRef<string>('');
 
   const { answers, studentSignature, trainerSignature } = useFormStore();
   const formDefinition = formDefinitionData as FormDefinition;
+
+  // Memoize current form state to detect changes
+  const currentFormState = useMemo(
+    () => JSON.stringify({ answers, studentSignature, trainerSignature, role }),
+    [answers, studentSignature, trainerSignature, role]
+  );
 
   const generatePdf = useCallback(async () => {
     setLoading(true);
@@ -74,43 +81,75 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
       );
       const total = (hasDetailsPage ? 1 : 0) + likertSections + (hasDeclarationsPage ? 1 : 0);
       setTotalPages(total);
+      
+      // Mark as up-to-date
+      lastGeneratedRef.current = currentFormState;
+      setIsOutdated(false);
     } catch (error) {
       console.error('Error generating PDF preview:', error);
       setError(error instanceof Error ? error.message : 'Failed to generate PDF preview');
     } finally {
       setLoading(false);
     }
-  }, [formDefinition, role, answers, studentSignature, trainerSignature]);
+  }, [formDefinition, role, answers, studentSignature, trainerSignature, currentFormState]);
 
-  // Debounced PDF generation
+  const handlePreview = async () => {
+    await generatePdf();
+  };
+
+  // Generate PDF on initial mount
   useEffect(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-
-    debounceTimerRef.current = setTimeout(() => {
+    if (!pdfUrl && !loading) {
       generatePdf();
-    }, 300);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
+  // Track if PDF is outdated (form changed since last generation)
+  useEffect(() => {
+    if (pdfUrl && currentFormState !== lastGeneratedRef.current) {
+      setIsOutdated(true);
+    }
+  }, [currentFormState, pdfUrl]);
+
+  // Update iframe when page or zoom changes
+  useEffect(() => {
+    if (iframeRef.current && pdfUrl) {
+      const iframe = iframeRef.current;
+      const newSrc = `${pdfUrl}#page=${currentPage}&zoom=${Math.round(zoom * 100)}`;
+      // Force reload by setting src to empty first, then to new src
+      // This ensures the PDF viewer jumps to the correct page/zoom
+      if (iframe.contentWindow) {
+        try {
+          iframe.src = newSrc;
+          // Also try to update the hash if the PDF viewer supports it
+          iframe.contentWindow.location.hash = `#page=${currentPage}&zoom=${Math.round(zoom * 100)}`;
+        } catch (e) {
+          // Cross-origin restrictions might prevent this, so just update src
+          iframe.src = newSrc;
+        }
+      } else {
+        iframe.src = newSrc;
       }
-    };
-  }, [generatePdf]);
+    }
+  }, [pdfUrl, currentPage, zoom]);
 
   const handleDownload = async () => {
-    if (!pdfUrl) {
+    // Always regenerate before download to ensure latest data
+    if (!pdfUrl || isOutdated) {
       await generatePdf();
-      return;
+      // Wait a bit for PDF to be ready
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
-    const link = document.createElement('a');
-    link.href = pdfUrl;
-    link.download = `training-evaluation-form-${role}-${new Date().toISOString().split('T')[0]}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (pdfUrl) {
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = `training-evaluation-form-${role}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const handleFullscreen = () => {
@@ -123,8 +162,19 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
     <Card className="overflow-hidden" padding="none">
       {/* Header */}
       <div className="bg-gradient-to-r from-[var(--brand)] to-[#E06A0F] p-4">
-        <h3 className="text-white font-bold text-base">Live PDF Preview</h3>
-        <p className="text-orange-100 text-xs mt-0.5">Real-time preview of your form</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-white font-bold text-base">PDF Preview</h3>
+            <p className="text-orange-100 text-xs mt-0.5">
+              {isOutdated ? 'Preview may be outdated - click Preview to update' : 'Click Preview to generate PDF'}
+            </p>
+          </div>
+          {isOutdated && (
+            <div className="bg-orange-500/20 border border-orange-300/50 rounded px-2 py-1">
+              <span className="text-orange-100 text-[10px] font-medium">Outdated</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Controls */}
@@ -186,7 +236,32 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
 
         {/* Action Buttons */}
         <div className="flex gap-2">
-          <Button variant="primary" onClick={handleDownload} size="sm" className="flex-1 flex items-center justify-center gap-1.5 text-xs">
+          <Button
+            variant="primary"
+            onClick={handlePreview}
+            disabled={loading}
+            size="sm"
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <RotateCcw className="w-3.5 h-3.5" />
+                Preview
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleDownload}
+            disabled={loading}
+            size="sm"
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs"
+          >
             <Download className="w-3.5 h-3.5" />
             Download
           </Button>
@@ -198,7 +273,7 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
       </div>
 
       {/* Preview Area */}
-      <div className="p-4 bg-[var(--bg)] h-[520px] flex items-center justify-center overflow-hidden">
+      <div className="p-4 bg-[var(--bg)] h-[520px] flex items-center justify-center overflow-hidden relative">
         {loading ? (
           <div className="text-center">
             <Loader2 className="w-10 h-10 text-[var(--brand)] animate-spin mx-auto mb-3" />
@@ -222,8 +297,9 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
             <div className="bg-white p-2 rounded border border-[var(--border)] shadow-inner">
               <iframe
                 ref={iframeRef}
+                key={`${pdfUrl}-${currentPage}-${zoom}`}
                 src={`${pdfUrl}#page=${currentPage}&zoom=${Math.round(zoom * 100)}`}
-                className="border border-[var(--border)] rounded bg-white"
+                className="border border-[var(--border)] rounded bg-white transition-opacity duration-200"
                 style={{
                   width: `${595.28 * zoom}px`,
                   height: `${841.89 * zoom}px`,
