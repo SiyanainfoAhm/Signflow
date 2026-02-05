@@ -1,0 +1,143 @@
+@media print {
+  .likertTableWrap {
+    overflow-x: auto;
+  }
+
+  .likertTable {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #000;
+    table-layout: fixed;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  .likertTable th,
+  .likertTable td {
+    border: 1px solid #000;
+    padding: 0;
+  }
+
+  /* Header row */
+  .likertHeaderRow th {
+    height: 110px;
+    background: #6d6d6d;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .likertHeaderNo {
+    width: 50px;
+    text-align: center;
+    vertical-align: top;
+    padding-top: 8px;
+  }
+
+  .likertHeaderCriteria {
+    text-align: left;
+    vertical-align: top;
+    padding: 10px 0 0 10px;
+  }
+
+  .likertHeaderScale {
+    width: 55px;
+    text-align: center;
+    vertical-align: middle;
+    position: relative;
+  }
+
+  /* Vertical labels */
+  .likertVerticalLabel {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(-90deg);
+    transform-origin: center;
+    white-space: nowrap;
+    color: #ffffff;
+    opacity: 1;
+  }
+
+  /* Section row */
+  .likertSectionRow td {
+    height: 24px;
+    background: #6d6d6d;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .likertSectionCode {
+    width: 50px;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .likertSectionTitle {
+    padding-left: 10px;
+    vertical-align: middle;
+  }
+
+  /* Body rows */
+  .likertBodyRow td {
+    background: #ffffff;
+    font-size: 11px;
+    height: 22px;
+  }
+
+  .likertCellNo {
+    width: 50px;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .likertCellCriteria {
+    background: #6d6d6d !important;
+    color: #ffffff;
+    font-size: 10px;
+    line-height: 1.2;
+    padding: 6px 10px;
+    vertical-align: middle;
+  }
+
+  .likertCellRadio {
+    width: 55px;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  /* Custom radio to match reference */
+  .likertRadio {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid #8a8a8a;
+    border-radius: 50%;
+    background: #ffffff;
+    display: inline-grid;
+    place-content: center;
+    margin: 0;
+  }
+
+  .likertRadio::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    transform: scale(0);
+    transition: transform 0.05s ease-in-out;
+    background: #8a8a8a;
+  }
+
+  .likertRadio:checked::before {
+    transform: scale(1);
+  }
+
+  .likertRadio:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+}
+
+

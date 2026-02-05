@@ -1,0 +1,44 @@
+import React from 'react';
+import { cn } from '../utils/cn';
+
+interface CardProps {
+  children: React.ReactNode;
+  className?: string;
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+}
+
+export const Card: React.FC<CardProps> = ({ children, className, padding = 'md' }) => {
+  const paddingStyles = {
+    none: '',
+    sm: 'p-5',
+    md: 'p-6',
+    lg: 'p-8',
+  };
+
+  return (
+    <div
+      className={cn(
+        'bg-white rounded-card shadow-card border border-[var(--border)]',
+        paddingStyles[padding],
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+};
+
+export const CardHeader: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className,
+}) => {
+  return <div className={cn('mb-6', className)}>{children}</div>;
+};
+
+export const CardContent: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className,
+}) => {
+  return <div className={cn('space-y-6', className)}>{children}</div>;
+};
+

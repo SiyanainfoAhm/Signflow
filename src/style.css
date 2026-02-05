@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    --brand: #F47A1F;
+    --bg: #F8FAFC;
+    --border: #E5E7EB;
+    --text: #0F172A;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--bg);
+  }
+
+  #app {
+    min-height: 100vh;
+  }
+}
+
+.signature-canvas {
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+}

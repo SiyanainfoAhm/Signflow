@@ -1,0 +1,292 @@
+{
+  "meta": {
+    "title": "Training Evaluation Form",
+    "orgName": "SKYLINE INSTITUTE OF TECHNOLOGY",
+    "orgAddress": "Level 8, 310 King Street, Melbourne VIC-3000, RTO: 45989 CRICOS: 041148, Email: info@slit.edu.au, Phone: +61 3 9125 1661",
+    "version": "1.0.0"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "sections": [
+        {
+          "type": "detailsTable",
+          "title": "Student and trainer details",
+          "fields": [
+            {
+              "fieldId": "student.fullName",
+              "label": "Student Full Name",
+              "roleScope": "student",
+              "type": "text"
+            },
+            {
+              "fieldId": "student.id",
+              "label": "Student ID",
+              "roleScope": "student",
+              "type": "text"
+            },
+            {
+              "fieldId": "student.email",
+              "label": "Student Email",
+              "roleScope": "student",
+              "type": "email"
+            },
+            {
+              "fieldId": "trainer.fullName",
+              "label": "Trainer Full Name",
+              "roleScope": "trainer",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "type": "detailsTable",
+          "title": "Qualification and unit of competency",
+          "fields": [
+            {
+              "fieldId": "qualification.code",
+              "label": "Qualification Code",
+              "roleScope": "both",
+              "type": "text"
+            },
+            {
+              "fieldId": "qualification.name",
+              "label": "Qualification Name",
+              "roleScope": "both",
+              "type": "text"
+            },
+            {
+              "fieldId": "unit.code",
+              "label": "Unit Code",
+              "roleScope": "both",
+              "type": "text"
+            },
+            {
+              "fieldId": "unit.name",
+              "label": "Unit Name",
+              "roleScope": "both",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pageNumber": 2,
+      "sections": [
+        {
+          "type": "likertMatrix",
+          "title": "Logistics and Support Evaluation",
+          "questions": [
+            {
+              "fieldId": "logistics.q1",
+              "question": "The communication regarding the required attendance and time to study to pass this unit was correct",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "logistics.q2",
+              "question": "The staff were efficient and helpful.",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "logistics.q3",
+              "question": "The training equipment and material used was effective and prepared.",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "logistics.q4",
+              "question": "The training venue was conducive to learning (set-up for convenience of students, comfortable in terms of temperature, etc.)",
+              "roleScope": "student"
+            }
+          ],
+          "scaleLabels": [
+            "Strongly Disagree",
+            "Disagree",
+            "Neutral",
+            "Agree",
+            "Strongly Agree"
+          ]
+        },
+        {
+          "type": "textarea",
+          "fieldId": "logistics.comments",
+          "label": "Additional Comments on Logistics and Support",
+          "roleScope": "student",
+          "rows": 6
+        },
+        {
+          "type": "likertMatrix",
+          "title": "Learning Evaluation",
+          "questions": [
+            {
+              "fieldId": "learning.q1",
+              "question": "The learning materials were clear and well-organized",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "learning.q2",
+              "question": "The trainer explained concepts effectively",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "learning.q3",
+              "question": "The pace of instruction was appropriate",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "learning.q4",
+              "question": "I had sufficient opportunities to practice",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "learning.q5",
+              "question": "The assessment criteria were clear",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "learning.q6",
+              "question": "I feel confident in applying what I learned",
+              "roleScope": "student"
+            },
+            {
+              "fieldId": "learning.q7",
+              "question": "Overall, I am satisfied with the training",
+              "roleScope": "student"
+            }
+          ],
+          "scaleLabels": [
+            "Strongly Disagree",
+            "Disagree",
+            "Neutral",
+            "Agree",
+            "Strongly Agree"
+          ]
+        },
+        {
+          "type": "textarea",
+          "fieldId": "learning.comments",
+          "label": "Additional Comments on Learning Evaluation",
+          "roleScope": "student",
+          "rows": 6
+        },
+        {
+          "type": "likertMatrix",
+          "title": "Trainer/Assessor Evaluation",
+          "questions": [
+            {
+              "fieldId": "trainer.q1",
+              "question": "The student demonstrated understanding of key concepts",
+              "roleScope": "trainer"
+            },
+            {
+              "fieldId": "trainer.q2",
+              "question": "The student actively participated in activities",
+              "roleScope": "trainer"
+            },
+            {
+              "fieldId": "trainer.q3",
+              "question": "The student completed assignments on time",
+              "roleScope": "trainer"
+            },
+            {
+              "fieldId": "trainer.q4",
+              "question": "The student showed improvement throughout the course",
+              "roleScope": "trainer"
+            },
+            {
+              "fieldId": "trainer.q5",
+              "question": "The student met the assessment requirements",
+              "roleScope": "trainer"
+            },
+            {
+              "fieldId": "trainer.q6",
+              "question": "The student demonstrated practical skills effectively",
+              "roleScope": "trainer"
+            },
+            {
+              "fieldId": "trainer.q7",
+              "question": "Overall, the student performed satisfactorily",
+              "roleScope": "trainer"
+            }
+          ],
+          "scaleLabels": [
+            "Strongly Disagree",
+            "Disagree",
+            "Neutral",
+            "Agree",
+            "Strongly Agree"
+          ]
+        },
+        {
+          "type": "textarea",
+          "fieldId": "trainer.comments",
+          "label": "Additional Comments on Training",
+          "roleScope": "trainer",
+          "rows": 6
+        }
+      ]
+    },
+    {
+      "pageNumber": 3,
+      "sections": [
+        {
+          "type": "checkboxGroup",
+          "title": "Final Declarations",
+          "options": [
+            {
+              "fieldId": "declaration.acknowledged",
+              "label": "I acknowledge that I have read and understood the assessment requirements",
+              "roleScope": "both"
+            },
+            {
+              "fieldId": "declaration.accurate",
+              "label": "I confirm that the information provided is accurate and complete",
+              "roleScope": "both"
+            }
+          ]
+        },
+        {
+          "type": "signatureBlock",
+          "fieldId": "student.signature",
+          "label": "Student Signature",
+          "roleScope": "student",
+          "showNameField": true,
+          "showDateField": true
+        },
+        {
+          "type": "signatureBlock",
+          "fieldId": "trainer.signature",
+          "label": "Trainer/Assessor Signature",
+          "roleScope": "trainer",
+          "showNameField": true,
+          "showDateField": true
+        },
+        {
+          "type": "detailsTable",
+          "title": "Office Use Only",
+          "fields": [
+            {
+              "fieldId": "office.approved",
+              "label": "Approved By",
+              "roleScope": "office",
+              "type": "text"
+            },
+            {
+              "fieldId": "office.date",
+              "label": "Approval Date",
+              "roleScope": "office",
+              "type": "date"
+            },
+            {
+              "fieldId": "office.notes",
+              "label": "Office Notes",
+              "roleScope": "office",
+              "type": "text"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
