@@ -44,21 +44,21 @@ export const PremiumDetailsTable: React.FC<PremiumDetailsTableProps> = ({ sectio
   const fieldGroups = groupFields();
 
   return (
-    <Card className="mb-6">
-      <div className="mb-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-1">{section.title}</h3>
-        <p className="text-sm text-gray-600">Please provide the following information</p>
+    <Card className="mb-4 sm:mb-6">
+      <div className="mb-4 sm:mb-6">
+        <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">{section.title}</h3>
+        <p className="text-xs sm:text-sm text-gray-600">Please provide the following information</p>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {Object.entries(fieldGroups).map(([groupName, fields]) => (
-          <div key={groupName} className="space-y-4">
+          <div key={groupName} className="space-y-3 sm:space-y-4">
             <div className="pb-2 border-b border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              <h4 className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wide">
                 {groupName}
               </h4>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {fields.map((field) => {
                 // Allow viewing for both roles, but editing only for the owner
                 const fieldPrefix = field.fieldId.split('.')[0];

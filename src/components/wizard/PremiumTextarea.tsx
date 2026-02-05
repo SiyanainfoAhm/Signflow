@@ -21,7 +21,7 @@ export const PremiumTextarea: React.FC<PremiumTextareaProps> = ({ section, error
   if (!canView) return null;
 
   return (
-    <Card className="mb-6">
+    <Card className="mb-4 sm:mb-6">
       <Textarea
         label={section.label}
         value={value}

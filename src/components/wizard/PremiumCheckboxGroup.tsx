@@ -14,13 +14,13 @@ export const PremiumCheckboxGroup: React.FC<PremiumCheckboxGroupProps> = ({ sect
   const { role, answers, studentSubmitted, trainerSubmitted, updateAnswer } = useFormStore();
 
   return (
-    <Card className="mb-6">
-      <div className="mb-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-1">{section.title}</h3>
-        <p className="text-sm text-gray-600">Please acknowledge the following declarations</p>
+    <Card className="mb-4 sm:mb-6">
+      <div className="mb-4 sm:mb-6">
+        <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">{section.title}</h3>
+        <p className="text-xs sm:text-sm text-gray-600">Please acknowledge the following declarations</p>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {section.options.map((option) => {
           const canView = canViewField(role, option.roleScope);
           const canEdit = canEditField(role, option.roleScope, studentSubmitted, trainerSubmitted);

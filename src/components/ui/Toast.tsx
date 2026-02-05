@@ -60,9 +60,11 @@ export const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
         typeStyles[toast.type || 'success']
       )}
       style={{
-        minWidth: '320px',
-        maxWidth: '420px',
+        minWidth: '280px',
+        maxWidth: 'calc(100vw - 1.5rem)',
+        width: '100%',
       }}
+      className="sm:min-w-[320px] sm:max-w-[420px] sm:w-auto"
     >
       {/* Animated background line */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-white/30">
@@ -74,29 +76,31 @@ export const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
         />
       </div>
 
-      <div className="flex items-center gap-3 p-4 pr-3">
+      <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 pr-2 sm:pr-3">
         {/* Icon */}
         <div className="flex-shrink-0">
           <div className="relative">
             <div className="absolute inset-0 bg-white/20 rounded-full blur-sm animate-pulse" />
             <CheckCircle2
-              className={cn('w-6 h-6 relative z-10', iconColors[toast.type || 'success'])}
+              className={cn('w-5 h-5 sm:w-6 sm:h-6 relative z-10', iconColors[toast.type || 'success'])}
             />
           </div>
         </div>
 
         {/* Message */}
         <div className="flex-1 min-w-0">
-          <p className="text-white font-semibold text-sm leading-tight">{toast.message}</p>
+          <p className="text-white font-semibold text-xs sm:text-sm leading-tight break-words">
+            {toast.message}
+          </p>
         </div>
 
         {/* Close button */}
         <button
           onClick={handleRemove}
-          className="flex-shrink-0 p-1 rounded-full hover:bg-white/20 transition-colors group"
+          className="flex-shrink-0 p-1 rounded-full hover:bg-white/20 active:bg-white/30 transition-colors group touch-manipulation"
           aria-label="Close"
         >
-          <X className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+          <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white group-hover:scale-110 transition-transform" />
         </button>
       </div>
 
@@ -139,9 +143,9 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 pointer-events-none">
+    <div className="fixed top-3 right-3 sm:top-4 sm:right-4 left-3 sm:left-auto z-[9999] flex flex-col gap-2 sm:gap-3 pointer-events-none max-w-[calc(100vw-1.5rem)] sm:max-w-none">
       {toasts.map((toast) => (
-        <div key={toast.id} className="pointer-events-auto">
+        <div key={toast.id} className="pointer-events-auto w-full sm:w-auto">
           <ToastItem toast={toast} onRemove={onRemove} />
         </div>
       ))}

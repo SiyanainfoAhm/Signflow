@@ -312,14 +312,16 @@ export const FormWizardPage: React.FC = () => {
     <div className="min-h-screen bg-[var(--bg)]">
       {/* Header */}
       <div className="bg-white border-b border-[var(--border)] shadow-sm sticky top-0 z-20">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-[var(--text)]">{formDefinition.meta.title}</h1>
-              <p className="text-sm text-gray-600 mt-0.5">{formDefinition.meta.orgName}</p>
+        <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4 md:py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-[var(--text)] truncate">
+                {formDefinition.meta.title}
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate">{formDefinition.meta.orgName}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-semibold text-gray-700">Role:</label>
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+              <label className="text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap">Role:</label>
               <Select
                 value={role}
                 onChange={(value) => setRole(value as any)}
@@ -328,7 +330,7 @@ export const FormWizardPage: React.FC = () => {
                   { value: 'trainer', label: 'Trainer' },
                   { value: 'office', label: 'Office' },
                 ]}
-                className="w-36"
+                className="w-28 sm:w-32 md:w-36"
               />
             </div>
           </div>
@@ -336,15 +338,17 @@ export const FormWizardPage: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Left: Wizard Form */}
-          <div className="lg:col-span-9 space-y-6">
+          <div className="lg:col-span-9 space-y-4 sm:space-y-6">
             {/* Stepper Card */}
             <Card>
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-[var(--text)] mb-1">Training Evaluation Form</h2>
-                <p className="text-sm text-gray-600">Complete all steps to generate your evaluation form</p>
+              <div className="mb-4 sm:mb-6">
+                <h2 className="text-lg sm:text-xl font-bold text-[var(--text)] mb-1">
+                  Training Evaluation Form
+                </h2>
+                <p className="text-xs sm:text-sm text-gray-600">Complete all steps to generate your evaluation form</p>
               </div>
               <Stepper
                 steps={wizardSteps.map((s) => ({
@@ -359,14 +363,14 @@ export const FormWizardPage: React.FC = () => {
             {/* Step Content Card */}
             {currentStepData && (
               <Card>
-                <div className="mb-8">
-                  <h2 className="text-2xl font-bold text-[var(--text)] mb-2">
+                <div className="mb-4 sm:mb-6 md:mb-8">
+                  <h2 className="text-xl sm:text-2xl font-bold text-[var(--text)] mb-1 sm:mb-2">
                     Step {currentStep}: {currentStepData.label}
                   </h2>
-                  <p className="text-sm text-gray-600">{currentStepData.description}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">{currentStepData.description}</p>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   {currentStepData.sections.map((section) => renderSection(section))}
                 </div>
 
@@ -386,8 +390,8 @@ export const FormWizardPage: React.FC = () => {
             )}
           </div>
 
-          {/* Right: PDF Preview */}
-          <div className="lg:col-span-3">
+          {/* Right: PDF Preview - Hidden on mobile, shown on tablet+ */}
+          <div className="lg:col-span-3 hidden md:block">
             <div className="lg:sticky lg:top-4">
               <PremiumPdfPreviewCard role={role} />
             </div>

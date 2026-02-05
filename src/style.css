@@ -15,10 +15,43 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: var(--bg);
+    /* Prevent text size adjustment on iOS */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   #app {
     min-height: 100vh;
+    /* Prevent horizontal scroll on mobile */
+    overflow-x: hidden;
+  }
+
+  /* Mobile-specific improvements */
+  @media (max-width: 640px) {
+    /* Prevent zoom on input focus for iOS */
+    input[type="text"],
+    input[type="email"],
+    input[type="number"],
+    input[type="date"],
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+
+    /* Better touch targets */
+    button,
+    a,
+    input[type="radio"],
+    input[type="checkbox"],
+    label {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* Improve scrolling */
+    * {
+      -webkit-overflow-scrolling: touch;
+    }
   }
 }
 

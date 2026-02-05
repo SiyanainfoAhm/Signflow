@@ -123,12 +123,12 @@ export const PremiumSignatureBlock: React.FC<PremiumSignatureBlockProps> = ({ se
 
   return (
     <>
-      <Card className="mb-6">
-        <div className="mb-4">
-          <h3 className="text-xl font-bold text-[var(--text)] mb-1">{section.label}</h3>
-          <p className="text-sm text-gray-600">Please provide your signature below</p>
+      <Card className="mb-4 sm:mb-6">
+        <div className="mb-3 sm:mb-4">
+          <h3 className="text-lg sm:text-xl font-bold text-[var(--text)] mb-1">{section.label}</h3>
+          <p className="text-xs sm:text-sm text-gray-600">Please provide your signature below</p>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {section.showNameField && (
             <Input
               label={isStudentSig ? 'Student Name' : 'Trainer/Assessor Name'}
@@ -140,50 +140,53 @@ export const PremiumSignatureBlock: React.FC<PremiumSignatureBlockProps> = ({ se
             />
           )}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
               {isStudentSig ? 'Student Signature' : 'Trainer/Assessor Signature'}
             </label>
             {canEdit ? (
-              <div className="border-2 border-[var(--border)] rounded-lg bg-white" style={{ height: '140px' }}>
+              <div
+                className="border-2 border-[var(--border)] rounded-lg bg-white"
+                style={{ height: '120px', minHeight: '120px' }}
+              >
                 {signature?.imageDataUrl ? (
-                  <div className="h-full flex items-center justify-center p-4">
-                    <div className="flex items-center gap-4">
+                  <div className="h-full flex items-center justify-center p-2 sm:p-4">
+                    <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
                       <div className="flex-shrink-0">
                         <img
                           src={signature.imageDataUrl}
                           alt="Signature"
-                          className="h-16 w-auto rounded border border-[var(--border)] bg-white shadow-sm"
+                          className="h-12 sm:h-16 w-auto rounded border border-[var(--border)] bg-white shadow-sm"
                         />
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5 sm:gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => setIsModalOpen(true)}
-                          className="flex items-center gap-2"
+                          className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-3"
                         >
-                          <Edit2 className="w-4 h-4" />
-                          Edit
+                          <Edit2 className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+                          <span className="hidden sm:inline">Edit</span>
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={handleClearSignature}
-                          className="flex items-center gap-2 text-red-600 hover:text-red-700"
+                          className="flex items-center gap-1 sm:gap-2 text-red-600 hover:text-red-700 text-xs sm:text-sm px-2 sm:px-3"
                         >
-                          <X className="w-4 h-4" />
-                          Clear
+                          <X className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+                          <span className="hidden sm:inline">Clear</span>
                         </Button>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="h-full flex items-center justify-center">
+                  <div className="h-full flex items-center justify-center p-2 sm:p-4">
                     {nameValue ? (
                       <button
                         type="button"
                         onClick={() => setIsModalOpen(true)}
-                        className="text-blue-600 italic text-sm font-medium hover:text-blue-700 hover:underline cursor-pointer transition-colors px-4 py-2"
+                        className="text-blue-600 italic text-xs sm:text-sm font-medium hover:text-blue-700 hover:underline cursor-pointer transition-colors px-2 sm:px-4 py-1 sm:py-2 text-center"
                       >
                         {nameValue}
                       </button>
@@ -192,27 +195,30 @@ export const PremiumSignatureBlock: React.FC<PremiumSignatureBlockProps> = ({ se
                         variant="outline"
                         size="sm"
                         onClick={() => setIsModalOpen(true)}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
                       >
-                        Add Signature
+                        <span>Add Signature</span>
                       </Button>
                     )}
                   </div>
                 )}
               </div>
             ) : (
-              <div className="border-2 border-[var(--border)] rounded-lg bg-gray-50" style={{ height: '140px' }}>
-                <div className="h-full flex items-center justify-center">
+              <div
+                className="border-2 border-[var(--border)] rounded-lg bg-gray-50"
+                style={{ height: '120px', minHeight: '120px' }}
+              >
+                <div className="h-full flex items-center justify-center p-2 sm:p-4">
                   {signature?.imageDataUrl ? (
                     <img
                       src={signature.imageDataUrl}
                       alt="Signature"
-                      className="h-16 mx-auto rounded border border-[var(--border)] bg-white shadow-sm"
+                      className="h-12 sm:h-16 mx-auto rounded border border-[var(--border)] bg-white shadow-sm"
                     />
                   ) : nameValue ? (
-                    <p className="text-sm font-medium text-blue-600 italic">{nameValue}</p>
+                    <p className="text-xs sm:text-sm font-medium text-blue-600 italic text-center">{nameValue}</p>
                   ) : (
-                    <span className="text-gray-500 italic text-sm">No signature saved</span>
+                    <span className="text-gray-500 italic text-xs sm:text-sm">No signature saved</span>
                   )}
                 </div>
               </div>

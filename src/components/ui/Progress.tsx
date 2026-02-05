@@ -13,12 +13,12 @@ export const Progress: React.FC<ProgressProps> = ({ value, className, showLabel 
   return (
     <div className={cn('w-full', className)}>
       {showLabel && (
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-medium text-gray-700">Progress</span>
-          <span className="text-sm font-semibold text-[var(--brand)]">{Math.round(clampedValue)}%</span>
+        <div className="flex justify-between items-center mb-1.5 sm:mb-2">
+          <span className="text-xs sm:text-sm font-medium text-gray-700">Progress</span>
+          <span className="text-xs sm:text-sm font-semibold text-[var(--brand)]">{Math.round(clampedValue)}%</span>
         </div>
       )}
-      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+      <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2 overflow-hidden">
         <div
           className="bg-[var(--brand)] h-full rounded-full transition-all duration-300 ease-out"
           style={{ width: `${clampedValue}%` }}
