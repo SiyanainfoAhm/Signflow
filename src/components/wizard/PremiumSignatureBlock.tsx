@@ -14,7 +14,7 @@ interface PremiumSignatureBlockProps {
   errors?: Record<string, string>;
 }
 
-export const PremiumSignatureBlock: React.FC<PremiumSignatureBlockProps> = ({ section, errors = {} }) => {
+export const PremiumSignatureBlock: React.FC<PremiumSignatureBlockProps> = ({ section, errors: _errors = {} }) => {
   const {
     role,
     studentSignature,
