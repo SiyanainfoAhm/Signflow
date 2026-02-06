@@ -57,14 +57,14 @@ export const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
         isVisible && !isRemoving
           ? 'translate-x-0 opacity-100 scale-100'
           : 'translate-x-full opacity-0 scale-95',
-        typeStyles[toast.type || 'success']
+        typeStyles[toast.type || 'success'],
+        'sm:min-w-[320px] sm:max-w-[420px] sm:w-auto'
       )}
       style={{
         minWidth: '280px',
         maxWidth: 'calc(100vw - 1.5rem)',
         width: '100%',
       }}
-      className="sm:min-w-[320px] sm:max-w-[420px] sm:w-auto"
     >
       {/* Animated background line */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-white/30">
