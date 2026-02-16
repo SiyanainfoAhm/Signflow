@@ -6,7 +6,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
-const DEFAULT_ROLES = { student: true, trainer: true, office: true };
 const READ_ONLY_VISIBLE = { student: true, trainer: true, office: true };
 const TRAINER_ONLY_EDIT = { student: false, trainer: true, office: false };
 
