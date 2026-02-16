@@ -102,6 +102,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         error={error}
         required={question.required}
         helperText={question.help_text || undefined}
+        rows={8}
       />
     );
   }

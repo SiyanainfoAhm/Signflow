@@ -53,6 +53,7 @@ interface FormSection {
   description: string | null;
   pdf_render_mode: string;
   sort_order: number;
+  assessment_task_row_id?: number | null;
 }
 
 interface FormQuestionRow {
@@ -61,6 +62,7 @@ interface FormQuestionRow {
   row_label: string;
   row_help: string | null;
   row_image_url: string | null;
+  row_meta?: { instructions?: Record<string, unknown> } | null;
   sort_order: number;
 }
 
@@ -189,8 +191,13 @@ function buildHtml(data: {
     }>;
   }>;
   answers: Map<string, string | number | Record<string, unknown>>;
+  taskRowsMap?: Map<number, FormQuestionRow>;
+  trainerAssessments?: Map<number, string>;
+  resultsOffice?: Map<number, { entered_date: string | null; entered_by: string | null }>;
+  resultsData?: Map<number, { first_attempt_satisfactory?: string | null; first_attempt_date?: string | null; first_attempt_feedback?: string | null; second_attempt_satisfactory?: string | null; second_attempt_date?: string | null; second_attempt_feedback?: string | null; trainer_name?: string | null; trainer_signature?: string | null; trainer_date?: string | null }>;
+  assessmentSummaryData?: Record<string, string | null>;
 }): { html: string; unitCode: string; version: string; headerHtml: string } {
-  const { form, steps, answers } = data;
+  const { form, steps, answers, taskRowsMap = new Map(), trainerAssessments = new Map(), resultsOffice = new Map(), resultsData = new Map(), assessmentSummaryData = {} } = data;
   let headerImg = form.header_asset_url || '';
   if (!headerImg) {
     try {
@@ -239,12 +246,16 @@ function buildHtml(data: {
     .declaration-checkbox { display: inline-flex; align-items: flex-start; gap: 10px; }
     .declaration-checkbox .cb { width: 18px; height: 18px; border: 1px solid #d1d5db; border-radius: 3px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #1f2937; background: #fff; }
     .declaration-checkbox .cb.checked { color: #1f2937; }
+    .assessment-submission-section { border: 1px solid #000; padding: 12px; background: #fff; margin-bottom: 12px; }
     .assessment-submission-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
     .assessment-submission-item { display: inline-flex; align-items: center; gap: 8px; }
-    .assessment-submission-item .cb { width: 18px; height: 18px; border: 1px solid #374151; border-radius: 3px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #1f2937; background: #fff; }
+    .assessment-submission-item .cb { width: 18px; height: 18px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #1f2937; background: #fff; }
     .assessment-submission-item .cb.checked { background: #1f2937; color: #fff; }
     .assessment-submission-item .question-label { font-weight: normal; font-style: normal; }
-    .assessment-submission-item .cb-inline-input { border: none; border-bottom: 1px solid #333; min-width: 100px; flex: 1; background: transparent; padding: 2px 4px; font-size: 9pt; display: inline-block; }
+    .assessment-submission-item .cb-inline-input { border: none; border-bottom: 1px solid #333; min-width: 120px; flex: 1; background: transparent; padding: 2px 4px; font-size: 9pt; display: inline-block; }
+    .assessment-submission-item.span-full { grid-column: 1 / -1; }
+    .assessment-submission-other-block { grid-column: 1 / -1; margin-top: 8px; text-align: center; }
+    .assessment-submission-other-block .other-underline { display: block; margin: 0 auto; border: none; border-bottom: 1px solid #333; min-width: 200px; min-height: 18px; background: transparent; }
     .assessment-submission-hint { text-align: center; font-size: 8pt; font-style: italic; color: #6b7280; margin-top: 4px; }
     .reasonable-adjustment-section { border: 1px solid #000; margin-bottom: 12px; }
     .reasonable-adjustment-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
@@ -259,6 +270,46 @@ function buildHtml(data: {
     .reasonable-adjustment-sig-line { flex: 1; min-width: 120px; border-bottom: 1px solid #333; min-height: 20px; }
     .reasonable-adjustment-date-label { margin-left: 24px; font-weight: 600; }
     .reasonable-adjustment-date-line { flex: 1; min-width: 80px; border-bottom: 1px solid #333; min-height: 20px; }
+    .task-instructions-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
+    .task-questions-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
+    .task-questions-instruction { background: #6b7280 !important; color: #fff !important; font-size: 9pt; padding: 8px 16px; margin: 0; }
+    .task-instructions-subheader { background: #6b7280 !important; color: #fff !important; font-size: 9pt; padding: 10px 16px; margin: 0; }
+    .task-instructions-block { margin: 12px 0; }
+    .task-instructions-block-title { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 8px 12px; }
+    .task-instructions-block-content { padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; line-height: 1.5; }
+    .task-instructions-block-content ul { margin: 8px 0; padding-left: 20px; }
+    .task-instructions-block-content p { margin: 6px 0; }
+    .result-sheet-page { page-break-before: always; }
+    .task-results-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
+    .task-results-outcome { margin: 12px 0; }
+    .task-results-outcome-title { font-weight: bold; margin-bottom: 6px; }
+    .result-sheet-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; }
+    .result-sheet-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: top; line-height: 1.35; }
+    .result-sheet-table .result-label { width: 25%; background: #e5e7eb !important; color: #374151; font-weight: 600; }
+    .result-sheet-table .result-label.decl-office-label { background: #f5f0e6 !important; }
+    .result-sheet-table .result-value { background: #fff !important; color: #1f2937; }
+    .result-sheet-table .answer-line { border: none; border-bottom: 1px solid #333; min-height: 18px; padding: 2px 4px; background: transparent; display: block; }
+    .result-sheet-table .answer-line-inline { border: none; border-bottom: 1px solid #333; min-height: 14px; padding: 0 4px 2px; background: transparent; display: inline-block; min-width: 80px; }
+    .result-sheet-table .answer-box { border: 1px solid #333; min-height: 24px; padding: 6px 8px; background: #e5e7eb; display: block; }
+    .result-sheet-table .answer-box-large { min-height: 60px; background: #fff; }
+    .result-sheet-table .result-radio { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; }
+    .result-sheet-table .result-radio .radio-circle { width: 12px; height: 12px; border: 1.5px solid #374151; border-radius: 50%; flex-shrink: 0; }
+    .result-sheet-table .result-radio .radio-circle.filled { background: #1f2937; border-color: #1f2937; }
+    .assessment-summary-page { page-break-before: always; }
+    .assessment-summary-header { background: #d1d5db !important; color: #374151 !important; font-weight: bold; font-size: 12pt; padding: 14px 16px; text-align: center; margin: 16px 0 0 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .assessment-summary-intro { background: #fff !important; color: #374151 !important; font-size: 9pt; padding: 12px 16px; margin: 0; line-height: 1.5; border: 1px solid #000; border-top: none; }
+    .assessment-summary-intro .intro-main { font-size: 10pt; font-weight: 600; margin-bottom: 8px; }
+    .assessment-summary-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .assessment-summary-table th, .assessment-summary-table td { border: 1px solid #000; padding: 8px 10px; vertical-align: top; line-height: 1.35; }
+    .assessment-summary-table .summary-label { width: 25%; background: #5E5E5E !important; color: #fff !important; font-weight: 600; }
+    .assessment-summary-table .summary-value { background: #fff !important; color: #1f2937; }
+    .assessment-summary-table .summary-attempt-value { background: #f3f4f6 !important; color: #1f2937; }
+    .assessment-summary-table .summary-result-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; text-align: center; }
+    .assessment-summary-table .summary-attempt-col { width: 25%; text-align: center; }
+    .assessment-summary-table .summary-office { background: #f5f0e6 !important; color: #1f2937 !important; }
+    .assessment-summary-table .summary-date-line { border: none; border-bottom: 1px solid #333; min-height: 14px; padding: 0 4px 2px; background: transparent; display: inline-block; min-width: 70px; font-size: 8pt; }
+    .assessment-summary-table .summary-cb { width: 14px; height: 14px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: #1f2937; background: #fff; }
+    .assessment-summary-table .summary-cb.checked { background: #1f2937; color: #fff; }
     .decl-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; border-left: 1px solid #000 !important; }
     .decl-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: middle; line-height: 1.35; overflow: visible; }
     .decl-table td:first-child { border-left: 1px solid #000 !important; }
@@ -268,7 +319,8 @@ function buildHtml(data: {
     .decl-table .decl-other-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; padding: 10px 12px; vertical-align: middle; }
     .decl-table .decl-office-label { font-style: italic; }
     .decl-sig-heading { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #1f2937; }
-    .answer-box { border-bottom: 1px solid #333; min-height: 20px; padding: 2px 4px; overflow: visible; }
+    .answer-box { border: 1px solid #333; min-height: 24px; padding: 6px 8px; overflow: visible; background: #fff; }
+    .answer-box.answer-box-large { min-height: 80px; }
     table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 12px; }
     th, td { border: 1px solid #000; padding: 10px 12px; vertical-align: middle; line-height: 1.35; overflow: visible; }
     th { background: #5E5E5E; color: #fff; font-weight: bold; }
@@ -292,9 +344,15 @@ function buildHtml(data: {
     .likert-table tbody .row-alt .likert-radio { background: #f9fafb !important; }
     .radio-circle { display: inline-block; width: 12px; height: 12px; border: 1.5px solid #4b5563; border-radius: 50%; }
     .radio-circle.filled { background: #1f2937; border-color: #1f2937; }
-    .signature-img { max-width: 150px; max-height: 60px; }
+    .signature-img { max-width: 150px; max-height: 60px; display: block; }
+    .grid-table-no-border th, .grid-table-no-border td { border: 1px solid #000 !important; background: transparent !important; }
+    .grid-table-no-border tbody tr { background: transparent !important; }
+    .grid-table-no-border .label-cell, .grid-table-no-border .value-cell { background: transparent !important; }
+    .grid-table-no-border .sub-section-header { background: transparent !important; color: #1f2937 !important; border: 1px solid #000 !important; }
+    .task-questions-table .label-cell, .task-questions-table .value-cell, .task-questions-table td { background: #fff !important; }
     .step-page { page-break-after: always; }
-    .section-table, .likert-table, .decl-table, .assessment-tasks-table { page-break-inside: auto; }
+    .section-table, .likert-table, .assessment-tasks-table { page-break-inside: auto; }
+    .decl-table, .result-sheet-table, .assessment-summary-table { page-break-inside: avoid; }
     .step-page:first-child { padding-top: 20px; }
     .step-page:not(:first-child) { padding-top: 24px; }
     .intro-page h2.intro-title { font-size: 18pt; font-weight: bold; margin: 0 0 16px 0; color: #1f2937; border-left: none; padding-left: 0; }
@@ -472,8 +530,14 @@ function buildHtml(data: {
     }
   }
 
+  const formExt = form as { qualification_code?: string | null; qualification_name?: string | null; unit_name?: string | null };
+  if (!codeToValue.has('qualification.code') && formExt.qualification_code) codeToValue.set('qualification.code', formExt.qualification_code);
+  if (!codeToValue.has('qualification.name') && formExt.qualification_name) codeToValue.set('qualification.name', formExt.qualification_name);
+  if (!codeToValue.has('unit.code') && form.unit_code) codeToValue.set('unit.code', form.unit_code);
+  if (!codeToValue.has('unit.name') && formExt.unit_name) codeToValue.set('unit.name', formExt.unit_name);
+
   const unitCode = String(codeToValue.get('unit.code') ?? form.unit_code ?? '');
-  const unitTitle = String(codeToValue.get('unit.name') ?? codeToValue.get('qualification.name') ?? '');
+  const unitTitle = String(codeToValue.get('unit.name') ?? codeToValue.get('qualification.name') ?? formExt.unit_name ?? formExt.qualification_name ?? '');
   const studentName = String(codeToValue.get('student.fullName') ?? '');
   const studentId = String(codeToValue.get('student.id') ?? '');
   const coverImg = (form as { cover_asset_url?: string | null }).cover_asset_url || '';
@@ -557,7 +621,7 @@ function buildHtml(data: {
     html += `<div class="step-page">`;
     for (const { sections } of group) {
       for (const { section, questions } of sections) {
-      if (section.pdf_render_mode !== 'declarations' && section.pdf_render_mode !== 'reasonable_adjustment') {
+      if (section.pdf_render_mode !== 'declarations' && section.pdf_render_mode !== 'reasonable_adjustment' && section.pdf_render_mode !== 'task_instructions' && section.pdf_render_mode !== 'task_results' && section.pdf_render_mode !== 'task_questions' && section.pdf_render_mode !== 'assessment_summary') {
         html += `<h3>${headerNum}. ${section.title}</h3>`;
         headerNum++;
         if (section.description) html += `<p>${section.description}</p>`;
@@ -593,8 +657,22 @@ function buildHtml(data: {
         }
         html += '</tbody></table>';
       } else if (section.pdf_render_mode === 'grid_table') {
-        const cols = (questions[0]?.question?.pdf_meta?.columns as string[]) || ['Column 1', 'Column 2'];
-        html += '<table><thead><tr><th>Shape</th>';
+        const pm = (questions[0]?.question?.pdf_meta as Record<string, unknown>) || {};
+        const cols = (Array.isArray(pm.columns) ? pm.columns : ['Column 1', 'Column 2']) as string[];
+        const columnTypes = (pm.columnTypes as string[]) || cols.map(() => 'answer');
+        const layout = (pm.layout as string) || 'default';
+        const isSplit = layout === 'split' || layout === 'polygon';
+        const isNoImage = layout === 'no_image';
+        const firstCol = (pm.firstColumnLabel as string) || (isNoImage ? 'Item' : layout === 'polygon' ? 'Polygon Name' : 'Name');
+        const secondCol = (pm.secondColumnLabel as string) || (isNoImage ? 'Description' : layout === 'polygon' ? 'Polygon Shape' : 'Image');
+        html += '<table class="grid-table-no-border"><thead><tr>';
+        if (isSplit) {
+          html += `<th>${secondCol}</th>`;
+        } else if (isNoImage) {
+          html += `<th>${firstCol}</th><th>${secondCol}</th>`;
+        } else {
+          html += '<th>Shape</th>';
+        }
         for (const c of cols) html += `<th>${c}</th>`;
         html += '</tr></thead><tbody>';
         for (const { question, rows } of questions) {
@@ -602,9 +680,17 @@ function buildHtml(data: {
             const key = `q-${question.id}-${row.id}`;
             const val = answers.get(key) as Record<string, string> | undefined;
             html += '<tr>';
-            html += `<td>${row.row_image_url ? `<img src="${row.row_image_url}" class="signature-img" alt="" />` : ''}<br>${row.row_label}</td>`;
+            if (isSplit) {
+              html += `<td>${row.row_image_url ? `<img src="${row.row_image_url}" class="signature-img" alt="" /><br/>${row.row_label}` : row.row_label}</td>`;
+            } else if (isNoImage) {
+              html += `<td>${row.row_label}</td>`;
+              html += `<td>${row.row_help || '—'}</td>`;
+            } else {
+              html += `<td>${row.row_image_url ? `<img src="${row.row_image_url}" class="signature-img" alt="" /><br/>${row.row_label}` : row.row_label}</td>`;
+            }
             for (let i = 0; i < cols.length; i++) {
-              const cellVal = val && typeof val === 'object' ? (val[`r${row.id}_c${i}`] || '') : '';
+              const colType = columnTypes[i] === 'question' ? 'question' : 'answer';
+              const cellVal = colType === 'question' ? (row.row_help || '—') : (val && typeof val === 'object' ? (val[`r${row.id}_c${i}`] || '') : '');
               html += `<td>${cellVal}</td>`;
             }
             html += '</tr>';
@@ -631,13 +717,15 @@ function buildHtml(data: {
         const mcVal = multiChoice ? answers.get(`q-${multiChoice.question.id}`) : undefined;
         const selected = new Set(Array.isArray(mcVal) ? (mcVal as string[]) : []);
         const opts = multiChoice?.options ?? [];
-        html += '<div class="declarations-section">';
+        html += '<div class="assessment-submission-section">';
         html += '<div class="assessment-submission-grid">';
         for (let i = 0; i < opts.length; i++) {
           const opt = opts[i];
           const checked = selected.has(opt.value);
           const isOther = opt.value === 'other';
-          html += '<div class="assessment-submission-item">';
+          const isLms = /lms|learning management/i.test(opt.label);
+          const itemClass = 'assessment-submission-item' + (isLms || isOther ? ' span-full' : '');
+          html += `<div class="${itemClass}">`;
           html += `<span class="cb ${checked ? 'checked' : ''}">${checked ? '✓' : ''}</span>`;
           html += `<span class="question-label">${opt.label}</span>`;
           if (isOther) {
@@ -645,9 +733,207 @@ function buildHtml(data: {
           }
           html += '</div>';
         }
-        html += '</div>';
+        html += '<div class="assessment-submission-other-block">';
+        html += '<div class="other-underline"></div>';
         html += '<div class="assessment-submission-hint">(Please describe here)</div>';
         html += '</div>';
+        html += '</div>';
+        html += '</div>';
+      } else if (section.pdf_render_mode === 'task_instructions') {
+        const rowId = section.assessment_task_row_id;
+        const row = rowId ? taskRowsMap.get(rowId) : null;
+        const instr = row?.row_meta?.instructions as Record<string, string | string[] | undefined> | undefined;
+        const assessmentType = instr?.assessment_type ? String(instr.assessment_type).replace(/<[^>]*>/g, '').trim() || 'Assessment' : 'Assessment';
+        html += `<div class="task-instructions-header">Student Instructions: ${row?.row_label || section.title} – ${assessmentType}</div>`;
+        html += `<div class="task-instructions-subheader">Assessment method-based instructions and guidelines: ${row?.row_help || ''}</div>`;
+        if (instr) {
+          const blocks: { title: string; content: string }[] = [
+            { title: 'Assessment type', content: String(instr.assessment_type || '') },
+            { title: 'Instructions provided to the student:', content: String(instr.task_description || '') },
+            { title: 'Applicable conditions:', content: String(instr.applicable_conditions || '') },
+            { title: 'Resubmissions and reattempts:', content: String(instr.resubmissions || '') },
+            { title: 'Location:', content: (instr.location_intro || '') + (Array.isArray(instr.location_options) ? '<ul><li>' + instr.location_options.map((o: string) => o).join('</li><li>') + '</li></ul>' : '') + (instr.location_note || '') },
+            { title: 'Instructions for answering the written questions:', content: String(instr.answering_instructions || '') },
+            { title: 'Purpose of the assessment', content: String(instr.purpose_intro || '') + String(instr.purpose_bullets || '') },
+          ];
+          for (const b of blocks) {
+            if (b.content && b.content.replace(/<[^>]*>/g, '').trim()) {
+              html += `<div class="task-instructions-block"><div class="task-instructions-block-title">${b.title}</div><div class="task-instructions-block-content">${b.content}</div></div>`;
+            }
+          }
+          if (instr.task_instructions && String(instr.task_instructions).replace(/<[^>]*>/g, '').trim()) {
+            html += `<div class="task-instructions-block"><div class="task-instructions-block-title">Task instructions</div><div class="task-instructions-block-content">${instr.task_instructions}</div></div>`;
+          }
+        }
+      } else if (section.pdf_render_mode === 'task_questions') {
+        html += `<div class="task-questions-header">${headerNum}. ${section.title}</div>`;
+        html += `<div class="task-questions-instruction">Provide your response to each question in the box below.</div>`;
+        headerNum++;
+        const normalQs = questions.filter((q) => q.question.type !== 'instruction_block' && q.question.type !== 'page_break');
+        html += '<table class="section-table task-questions-table"><thead><tr><th class="sub-section-header" style="width:75%">Question</th><th class="sub-section-header" style="width:25%;text-align:center">Satisfactory response</th></tr></thead><tbody>';
+        for (const { question, rows } of normalQs) {
+          const sat = trainerAssessments.get(question.id);
+          const satYes = sat === 'yes';
+          const satNo = sat === 'no';
+          html += '<tr><td class="value-cell" style="vertical-align:top">';
+          html += `<div class="question-label" style="margin-bottom:8px;font-weight:bold">${question.label}</div>`;
+          if (question.type === 'grid_table' && rows.length > 0) {
+            const pm = (question.pdf_meta as Record<string, unknown>) || {};
+            const cols = (Array.isArray(pm.columns) ? pm.columns : ['Column 1', 'Column 2']) as string[];
+            const layout = (pm.layout as string) || 'default';
+            const isSplit = layout === 'split' || layout === 'polygon';
+            const isNoImage = layout === 'no_image';
+            const firstCol = (pm.firstColumnLabel as string) || (isNoImage ? 'Item' : 'Name');
+            const secondCol = (pm.secondColumnLabel as string) || (isNoImage ? 'Description' : 'Image');
+            html += '<table class="section-table grid-table-no-border"><thead><tr>';
+            if (isSplit) {
+              html += `<th class="sub-section-header">${secondCol}</th>`;
+            } else if (isNoImage) {
+              html += `<th class="sub-section-header">${firstCol}</th><th class="sub-section-header">${secondCol}</th>`;
+            } else {
+              html += '<th class="sub-section-header">Shape</th>';
+            }
+            for (const c of cols) html += `<th class="sub-section-header">${c}</th>`;
+            html += '</tr></thead><tbody>';
+            for (const row of rows) {
+              const key = `q-${question.id}-${row.id}`;
+              const val = answers.get(key) as Record<string, string> | undefined;
+              html += '<tr>';
+              if (isSplit) {
+                html += `<td class="value-cell">${row.row_image_url ? `<img src="${row.row_image_url}" class="signature-img" alt="" /><br/>${row.row_label}` : row.row_label}</td>`;
+              } else if (isNoImage) {
+                html += `<td class="label-cell">${row.row_label}</td>`;
+                html += `<td class="value-cell">${row.row_help || '—'}</td>`;
+              } else {
+                html += `<td class="label-cell">${row.row_image_url ? `<img src="${row.row_image_url}" class="signature-img" alt="" /><br/>${row.row_label}` : row.row_label}</td>`;
+              }
+              const columnTypes = (pm.columnTypes as string[]) || cols.map(() => 'answer');
+              for (let i = 0; i < cols.length; i++) {
+                const colType = columnTypes[i] === 'question' ? 'question' : 'answer';
+                const cellVal = colType === 'question' ? (row.row_help || '—') : (val && typeof val === 'object' ? (val[`r${row.id}_c${i}`] || '') : '');
+                html += `<td class="value-cell">${cellVal}</td>`;
+              }
+              html += '</tr>';
+            }
+            html += '</tbody></table>';
+          } else {
+            const key = rows[0] ? `q-${question.id}-${rows[0].id}` : `q-${question.id}`;
+            const val = answers.get(key);
+            const boxClass = question.type === 'long_text' ? 'answer-box answer-box-large' : 'answer-box';
+            html += `<div class="question"><div class="${boxClass}">${val ?? ''}</div></div>`;
+          }
+          html += '</td><td class="label-cell" style="vertical-align:top;text-align:center;width:25%">';
+          html += '<div class="declaration-checkbox" style="margin:4px 0"><span class="cb' + (satYes ? ' checked' : '') + '">' + (satYes ? '✓' : '') + '</span><span class="question-label">Yes</span></div>';
+          html += '<div class="declaration-checkbox" style="margin:4px 0"><span class="cb' + (satNo ? ' checked' : '') + '">' + (satNo ? '✓' : '') + '</span><span class="question-label">No</span></div>';
+          html += '</td></tr>';
+        }
+        html += '</tbody></table>';
+      } else if (section.pdf_render_mode === 'task_results') {
+        const rowId = section.assessment_task_row_id;
+        const row = rowId ? taskRowsMap.get(rowId) : null;
+        const taskTitle = row?.row_label || section.title;
+        const rd = resultsData.get(section.id);
+        const f1s = rd?.first_attempt_satisfactory === 's';
+        const f1n = rd?.first_attempt_satisfactory === 'ns';
+        const f2s = rd?.second_attempt_satisfactory === 's';
+        const f2n = rd?.second_attempt_satisfactory === 'ns';
+        html += `<div class="result-sheet-page"><div class="task-results-header">${taskTitle} – Results Sheet</div>`;
+        html += '<table class="result-sheet-table"><tbody>';
+        html += '<tr><td class="result-label" rowspan="2">Outcome</td><td class="result-value">';
+        html += '<div class="task-results-outcome-title">First attempt:</div>';
+        html += '<div>Outcome (make sure to tick the correct checkbox):</div>';
+        html += '<div style="margin: 6px 0;"><span class="result-radio"><span class="radio-circle' + (f1s ? ' filled' : '') + '"></span><span class="question-label">Satisfactory (S)</span></span><span class="result-radio"><span class="radio-circle' + (f1n ? ' filled' : '') + '"></span><span class="question-label">Not Satisfactory (NS)</span></span></div>';
+        html += '<div style="margin: 8px 0;"><span class="question-label">Date:</span> <span class="answer-line-inline" style="min-width:120px;">' + (rd?.first_attempt_date ?? '') + '</span></div>';
+        html += '<div style="margin: 8px 0;"><span class="question-label">Feedback:</span><div class="answer-box answer-box-large">' + (rd?.first_attempt_feedback ?? '') + '</div></div>';
+        html += '</td></tr>';
+        html += '<tr><td class="result-value">';
+        html += '<div class="task-results-outcome-title">Second attempt:</div>';
+        html += '<div>Outcome (make sure to tick the correct checkbox):</div>';
+        html += '<div style="margin: 6px 0;"><span class="result-radio"><span class="radio-circle' + (f2s ? ' filled' : '') + '"></span><span class="question-label">Satisfactory (S)</span></span><span class="result-radio"><span class="radio-circle' + (f2n ? ' filled' : '') + '"></span><span class="question-label">Not Satisfactory (NS)</span></span></div>';
+        html += '<div style="margin: 8px 0;"><span class="question-label">Date:</span> <span class="answer-line-inline" style="min-width:120px;">' + (rd?.second_attempt_date ?? '') + '</span></div>';
+        html += '<div style="margin: 8px 0;"><span class="question-label">Feedback:</span><div class="answer-box answer-box-large">' + (rd?.second_attempt_feedback ?? '') + '</div></div>';
+        html += '</td></tr>';
+        html += '<tr><td class="result-label">Student Declaration</td><td class="result-value">';
+        html += '<ul style="margin: 8px 0; padding-left: 20px;"><li>I declare that the answers I have provided are my own work.</li><li>I have kept a copy of all relevant notes and reference material.</li><li>I have provided references for all sources where the information is not my own.</li>';
+        html += '<li>For the purposes of assessment, I give the trainer/assessor permission to:<ul style="margin: 4px 0; padding-left: 20px;"><li>i. Reproduce this assessment and provide a copy to another member of the RTO for the purposes of assessment.</li><li>ii. Take steps to authenticate the assessment, including conducting a plagiarism check.</li></ul></li></ul>';
+        html += '<p style="margin: 12px 0 4px 0;"><strong>I understand that if I disagree with the assessment outcome, I can appeal the assessment process, and either re-submit additional evidence undertake gap training and or have my submission re-assessed.</strong></p>';
+        html += '<p style="margin: 4px 0;"><strong>All appeal options have been explained to me.</strong></p>';
+        html += '</td></tr>';
+        html += '</tbody></table>';
+        html += '<table class="result-sheet-table"><tbody>';
+        html += '<tr><td class="result-label">Trainer/Assessor Name</td><td class="result-value"><div class="answer-line">' + (rd?.trainer_name ?? '') + '</div></td></tr>';
+        html += '<tr><td class="result-label">Trainer/Assessor Signature</td><td class="result-value"><div class="answer-line">' + (rd?.trainer_signature ?? '') + '</div></td></tr>';
+        html += '<tr><td class="result-label">Date</td><td class="result-value"><div class="answer-box" style="min-height:24px;min-width:120px;">' + (rd?.trainer_date ?? '') + '</div></td></tr>';
+        const officeEntry = resultsOffice.get(section.id);
+        const officeDate = officeEntry?.entered_date ?? '';
+        const officeName = officeEntry?.entered_by ?? '';
+        html += '<tr><td class="result-label decl-office-label">Office Use Only</td><td class="result-value">';
+        html += 'The outcome of this assessment has been entered into the Student Management System on <span class="answer-line-inline">' + officeDate + '</span> (insert date) by <span class="answer-line-inline">' + officeName + '</span> (insert Name)';
+        html += '</td></tr>';
+        html += '</tbody></table></div>';
+      } else if (section.pdf_render_mode === 'assessment_summary') {
+        const taskRowsOrdered: { id: number; row_label: string }[] = [];
+        const taskRowToSectionId = new Map<number, number>();
+        for (const g of steps) {
+          for (const { section: sec, questions } of g.sections) {
+            if (sec.pdf_render_mode === 'assessment_tasks') {
+              const taskQ = questions.find((q) => q.question.type === 'grid_table' && q.rows.length > 0);
+              if (taskQ) for (const r of taskQ.rows) taskRowsOrdered.push({ id: r.id, row_label: r.row_label });
+            }
+            if (sec.pdf_render_mode === 'task_results' && (sec as { assessment_task_row_id?: number }).assessment_task_row_id) {
+              taskRowToSectionId.set((sec as { assessment_task_row_id: number }).assessment_task_row_id, sec.id);
+            }
+          }
+        }
+        const sum = assessmentSummaryData;
+        const studentName = String(codeToValue.get('student.fullName') ?? '');
+        const studentId = String(codeToValue.get('student.id') ?? '');
+        const unitCodeName = [String(codeToValue.get('unit.code') ?? ''), String(codeToValue.get('unit.name') ?? '')].filter(Boolean).join(' ');
+        html += '<div class="assessment-summary-page"><div class="assessment-summary-header">ASSESSMENT SUMMARY SHEET</div>';
+        html += '<div class="assessment-summary-intro"><div class="intro-main">This form is to be completed by the assessor and used as a final record of student competency.</div>';
+        html += 'All student submissions including any associated checklists (outlined below) are to be attached to this cover sheet before placing on the student\'s file.<br/>';
+        html += 'Student results are not to be entered onto the Student Database unless all relevant paperwork is completed and attached to this form.</div>';
+        html += '<table class="assessment-summary-table"><tbody>';
+        html += '<tr><td class="summary-label" style="width:25%">Student Name:</td><td class="summary-value" colspan="3">' + studentName + '</td></tr>';
+        html += '<tr><td class="summary-label">Student ID:</td><td class="summary-value" colspan="3">' + studentId + '</td></tr>';
+        html += '<tr><td class="summary-label">Start date:</td><td class="summary-value"><span class="summary-date-line">' + (sum.start_date ?? '') + '</span></td><td class="summary-label" style="text-align:right;width:15%">End Date:</td><td class="summary-value"><span class="summary-date-line">' + (sum.end_date ?? '') + '</span></td></tr>';
+        html += '<tr><td class="summary-label">Unit Code & Name:</td><td class="summary-value" colspan="3">' + unitCodeName + '</td></tr>';
+        html += '</tbody></table>';
+        html += '<table class="assessment-summary-table"><thead><tr><th class="summary-label">Please attach the following evidence to this form</th><th colspan="3" class="summary-result-header">Result</th></tr>';
+        html += '<tr><th class="summary-label"></th><th class="summary-result-header summary-attempt-col">1st Attempt</th><th class="summary-result-header summary-attempt-col">2nd Attempt</th><th class="summary-result-header summary-attempt-col">3rd Attempt</th></tr></thead><tbody>';
+        for (const tr of taskRowsOrdered) {
+          const secId = taskRowToSectionId.get(tr.id);
+          const rd = secId ? resultsData.get(secId) : null;
+          const f1s = rd?.first_attempt_satisfactory === 's';
+          const f1n = rd?.first_attempt_satisfactory === 'ns';
+          const f2s = rd?.second_attempt_satisfactory === 's';
+          const f2n = rd?.second_attempt_satisfactory === 'ns';
+          html += '<tr><td class="summary-label">' + tr.row_label + '</td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f1s ? ' checked' : '') + '">' + (f1s ? '✓' : '') + '</span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f1n ? ' checked' : '') + '">' + (f1n ? '✓' : '') + '</span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line">' + (rd?.first_attempt_date ?? '') + '</span></div></td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f2s ? ' checked' : '') + '">' + (f2s ? '✓' : '') + '</span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f2n ? ' checked' : '') + '">' + (f2n ? '✓' : '') + '</span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line">' + (rd?.second_attempt_date ?? '') + '</span></div></td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td></tr>';
+        }
+        const fc1 = sum.final_attempt_1_result === 'competent';
+        const fnc1 = sum.final_attempt_1_result === 'not_yet_competent';
+        const fc2 = sum.final_attempt_2_result === 'competent';
+        const fnc2 = sum.final_attempt_2_result === 'not_yet_competent';
+        const fc3 = sum.final_attempt_3_result === 'competent';
+        const fnc3 = sum.final_attempt_3_result === 'not_yet_competent';
+        html += '<tr style="border-top:2px solid #000"><td class="summary-label">Final Assessment result for this unit</td>';
+        html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (fc1 ? ' checked' : '') + '">' + (fc1 ? '✓' : '') + '</span> Competent</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (fnc1 ? ' checked' : '') + '">' + (fnc1 ? '✓' : '') + '</span> Not Yet Competent</div></td>';
+        html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (fc2 ? ' checked' : '') + '">' + (fc2 ? '✓' : '') + '</span> Competent</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (fnc2 ? ' checked' : '') + '">' + (fnc2 ? '✓' : '') + '</span> Not Yet Competent</div></td>';
+        html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (fc3 ? ' checked' : '') + '">' + (fc3 ? '✓' : '') + '</span> Competent</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (fnc3 ? ' checked' : '') + '">' + (fnc3 ? '✓' : '') + '</span> Not Yet Competent</div></td></tr>';
+        html += '<tr><td class="summary-label" style="vertical-align:top"><span style="font-weight:600">Trainer/Assessor Signature</span><div style="font-size:8pt;font-style:italic;margin-top:6px;line-height:1.3">I declare that I have conducted a fair, valid, reliable, and flexible assessment with this student, and I have provided appropriate feedback</div></td><td colspan="3" class="summary-value">';
+        html += '<table style="width:100%;border:none;font-size:9pt"><tr><td style="width:33%;border:none;padding:4px 8px 4px 0;vertical-align:top"><div><span style="font-weight:600">Signature:</span></div><div><span class="summary-date-line" style="min-width:100%;display:block">' + (sum.trainer_sig_1 ?? '') + '</span></div><div style="margin-top:4px"><span style="font-weight:600">Date:</span> <span class="summary-date-line">' + (sum.trainer_date_1 ?? '') + '</span></div></td>';
+        html += '<td style="width:33%;border:none;padding:4px 8px;vertical-align:top"><div><span style="font-weight:600">Signature:</span></div><div><span class="summary-date-line" style="min-width:100%;display:block">' + (sum.trainer_sig_2 ?? '') + '</span></div><div style="margin-top:4px"><span style="font-weight:600">Date:</span> <span class="summary-date-line">' + (sum.trainer_date_2 ?? '') + '</span></div></td>';
+        html += '<td style="width:33%;border:none;padding:4px 0 4px 8px;vertical-align:top"><div><span style="font-weight:600">Signature:</span></div><div><span class="summary-date-line" style="min-width:100%;display:block">' + (sum.trainer_sig_3 ?? '') + '</span></div><div style="margin-top:4px"><span style="font-weight:600">Date:</span> <span class="summary-date-line">' + (sum.trainer_date_3 ?? '') + '</span></div></td></tr></table></td></tr>';
+        html += '<tr><td class="summary-label" style="vertical-align:top"><span style="font-weight:600">Student:</span><div style="font-size:8pt;font-style:italic;margin-top:6px;line-height:1.3">I declare that I have been assessed in this unit, and I have been advised of my result. I also am aware of my appeal rights.</div></td><td colspan="3" class="summary-value">';
+        html += '<table style="width:100%;border:none;font-size:9pt"><tr><td style="width:33%;border:none;padding:4px 8px 4px 0;vertical-align:top"><div><span style="font-weight:600">Signature:</span></div><div><span class="summary-date-line" style="min-width:100%;display:block">' + (sum.student_sig_1 ?? '') + '</span></div><div style="margin-top:4px"><span style="font-weight:600">Date:</span> <span class="summary-date-line">' + (sum.student_date_1 ?? '') + '</span></div></td>';
+        html += '<td style="width:33%;border:none;padding:4px 8px;vertical-align:top"><div><span style="font-weight:600">Signature:</span></div><div><span class="summary-date-line" style="min-width:100%;display:block">' + (sum.student_sig_2 ?? '') + '</span></div><div style="margin-top:4px"><span style="font-weight:600">Date:</span> <span class="summary-date-line">' + (sum.student_date_2 ?? '') + '</span></div></td>';
+        html += '<td style="width:33%;border:none;padding:4px 0 4px 8px;vertical-align:top"><div><span style="font-weight:600">Signature:</span></div><div><span class="summary-date-line" style="min-width:100%;display:block">' + (sum.student_sig_3 ?? '') + '</span></div><div style="margin-top:4px"><span style="font-weight:600">Date:</span> <span class="summary-date-line">' + (sum.student_date_3 ?? '') + '</span></div></td></tr></table></td></tr>';
+        html += '<tr><td class="summary-label">Student overall Feedback:</td><td colspan="3" class="summary-value"><div class="answer-box answer-box-large" style="min-height:80px;background:#fff">' + (sum.student_overall_feedback ?? '') + '</div></td></tr>';
+        html += '<tr><td class="summary-label summary-office" colspan="2">Administrative use only - Entered onto Student Management Database</td><td class="summary-label summary-office">Initials</td><td class="summary-value summary-office"><span class="summary-date-line" style="min-width:60px">' + (sum.admin_initials ?? '') + '</span></td></tr>';
+        html += '</tbody></table></div>';
       } else if (section.pdf_render_mode === 'reasonable_adjustment') {
         const yesNoQ = questions.find((q) => q.question.type === 'yes_no');
         const taskQ = questions.find((q) => q.question.code === 'reasonable_adjustment.task');
@@ -860,16 +1146,121 @@ app.get('/pdf/:instanceId', async (req, res) => {
       .select('*')
       .eq('instance_id', instanceId);
 
+    let trainerAssessmentsMap = new Map<number, string>();
+    try {
+      const { data: assessments } = await supabase
+        .from('skyline_form_trainer_assessments')
+        .select('question_id, satisfactory')
+        .eq('instance_id', instanceId);
+      for (const a of (assessments as { question_id: number; satisfactory: string | null }[]) || []) {
+        if (a.satisfactory) trainerAssessmentsMap.set(a.question_id, a.satisfactory);
+      }
+    } catch (_e) {
+      // Table may not exist before migration
+    }
+
+    let resultsOfficeMap = new Map<number, { entered_date: string | null; entered_by: string | null }>();
+    let resultsDataMap = new Map<number, Record<string, string | null>>();
+    try {
+      const { data: officeRows } = await supabase
+        .from('skyline_form_results_office')
+        .select('section_id, entered_date, entered_by')
+        .eq('instance_id', instanceId);
+      for (const r of (officeRows as { section_id: number; entered_date: string | null; entered_by: string | null }[]) || []) {
+        resultsOfficeMap.set(r.section_id, { entered_date: r.entered_date, entered_by: r.entered_by });
+      }
+    } catch (_e) {
+      // Table may not exist before migration
+    }
+    try {
+      const { data: resultsRows } = await supabase
+        .from('skyline_form_results_data')
+        .select('section_id, first_attempt_satisfactory, first_attempt_date, first_attempt_feedback, second_attempt_satisfactory, second_attempt_date, second_attempt_feedback, trainer_name, trainer_signature, trainer_date')
+        .eq('instance_id', instanceId);
+      for (const r of (resultsRows as Record<string, unknown>[]) || []) {
+        const sid = r.section_id as number;
+        resultsDataMap.set(sid, {
+          first_attempt_satisfactory: (r.first_attempt_satisfactory as string) ?? null,
+          first_attempt_date: (r.first_attempt_date as string) ?? null,
+          first_attempt_feedback: (r.first_attempt_feedback as string) ?? null,
+          second_attempt_satisfactory: (r.second_attempt_satisfactory as string) ?? null,
+          second_attempt_date: (r.second_attempt_date as string) ?? null,
+          second_attempt_feedback: (r.second_attempt_feedback as string) ?? null,
+          trainer_name: (r.trainer_name as string) ?? null,
+          trainer_signature: (r.trainer_signature as string) ?? null,
+          trainer_date: (r.trainer_date as string) ?? null,
+        });
+      }
+    } catch (_e) {
+      // Table may not exist before migration
+    }
+
+    let assessmentSummaryMap: Record<string, string | null> = {};
+    try {
+      const { data: sumRow } = await supabase
+        .from('skyline_form_assessment_summary_data')
+        .select('*')
+        .eq('instance_id', instanceId)
+        .single();
+      if (sumRow) {
+        const r = sumRow as Record<string, unknown>;
+        assessmentSummaryMap = {
+          start_date: (r.start_date as string) ?? null,
+          end_date: (r.end_date as string) ?? null,
+          final_attempt_1_result: (r.final_attempt_1_result as string) ?? null,
+          final_attempt_2_result: (r.final_attempt_2_result as string) ?? null,
+          final_attempt_3_result: (r.final_attempt_3_result as string) ?? null,
+          trainer_sig_1: (r.trainer_sig_1 as string) ?? null,
+          trainer_date_1: (r.trainer_date_1 as string) ?? null,
+          trainer_sig_2: (r.trainer_sig_2 as string) ?? null,
+          trainer_date_2: (r.trainer_date_2 as string) ?? null,
+          trainer_sig_3: (r.trainer_sig_3 as string) ?? null,
+          trainer_date_3: (r.trainer_date_3 as string) ?? null,
+          student_sig_1: (r.student_sig_1 as string) ?? null,
+          student_date_1: (r.student_date_1 as string) ?? null,
+          student_sig_2: (r.student_sig_2 as string) ?? null,
+          student_date_2: (r.student_date_2 as string) ?? null,
+          student_sig_3: (r.student_sig_3 as string) ?? null,
+          student_date_3: (r.student_date_3 as string) ?? null,
+          student_overall_feedback: (r.student_overall_feedback as string) ?? null,
+          admin_initials: (r.admin_initials as string) ?? null,
+        };
+      }
+    } catch (_e) {
+      // Table may not exist before migration
+    }
+
     const answerMap = getAnswerMap((answers as FormAnswer[]) || []);
+
+    const taskRowIds = new Set<number>();
+    for (const g of template.steps) {
+      for (const { section } of g.sections) {
+        const sid = (section as { assessment_task_row_id?: number | null }).assessment_task_row_id;
+        if (sid) taskRowIds.add(sid);
+      }
+    }
+    const taskRowsMap = new Map<number, FormQuestionRow>();
+    if (taskRowIds.size > 0) {
+      const { data: taskRows } = await supabase
+        .from('skyline_form_question_rows')
+        .select('*')
+        .in('id', Array.from(taskRowIds));
+      for (const r of (taskRows as FormQuestionRow[]) || []) taskRowsMap.set(r.id, r);
+    }
 
     const form = template.instance.form as { name: string; version: string | null; unit_code: string | null; header_asset_url: string | null; cover_asset_url?: string | null };
     const { html, unitCode, version, headerHtml } = buildHtml({
       form,
       steps: template.steps,
       answers: answerMap,
+      taskRowsMap,
+      trainerAssessments: trainerAssessmentsMap,
+      resultsOffice: resultsOfficeMap,
+      resultsData: resultsDataMap,
+      assessmentSummaryData: assessmentSummaryMap,
     });
     const footerHtml = `
-      <div style="font-size: 9pt; color: #374151; width: 100%; height: 50px; display: flex; justify-content: space-between; align-items: center; padding: 0 15mm; box-sizing: border-box;">
+      <div style="font-size: 9pt; color: #374151; width: 100%; height: 50px; display: flex; justify-content: space-between; align-items: center; padding: 0 15mm; box-sizing: border-box; page-break-inside: avoid;">
         <span>Version Number: ${version}</span>
         <span>Unit Code: ${unitCode || ''}</span>
         <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>

@@ -37,3 +37,31 @@ export async function uploadFormCoverImage(
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, error: null };
 }
+
+/**
+ * Upload row image to photomedia/skyline/{formId}/rows/{rowId}_{timestamp}.{ext}
+ * Stores the image in a folder structure by form ID and row ID.
+ * Returns the public URL of the uploaded file.
+ */
+export async function uploadRowImage(
+  formId: number,
+  questionId: number,
+  rowId: number,
+  file: File
+): Promise<UploadResult> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `${FOLDER}/${formId}/rows/${rowId}_${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    upsert: false,
+    contentType: file.type,
+  });
+
+  if (error) {
+    console.error('uploadRowImage error', error);
+    return { url: null, error: error.message };
+  }
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
+}

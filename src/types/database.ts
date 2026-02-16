@@ -10,6 +10,9 @@ export interface Database {
           version: string | null;
           status: string;
           unit_code: string | null;
+          unit_name: string | null;
+          qualification_code: string | null;
+          qualification_name: string | null;
           header_asset_url: string | null;
           cover_asset_url: string | null;
           created_at: string;
@@ -20,6 +23,9 @@ export interface Database {
           version?: string | null;
           status?: string;
           unit_code?: string | null;
+          unit_name?: string | null;
+          qualification_code?: string | null;
+          qualification_name?: string | null;
           header_asset_url?: string | null;
           cover_asset_url?: string | null;
           created_at?: string;
@@ -51,6 +57,7 @@ export interface Database {
           description: string | null;
           pdf_render_mode: string;
           sort_order: number;
+          assessment_task_row_id: number | null;
         };
         Insert: {
           id?: number;
@@ -59,6 +66,7 @@ export interface Database {
           description?: string | null;
           pdf_render_mode?: string;
           sort_order?: number;
+          assessment_task_row_id?: number | null;
         };
         Update: Partial<Database['public']['Tables']['form_sections']['Insert']>;
       };
@@ -115,6 +123,7 @@ export interface Database {
           row_label: string;
           row_help: string | null;
           row_image_url: string | null;
+          row_meta: Json | null;
           sort_order: number;
         };
         Insert: {
@@ -123,6 +132,7 @@ export interface Database {
           row_label: string;
           row_help?: string | null;
           row_image_url?: string | null;
+          row_meta?: Json | null;
           sort_order?: number;
         };
         Update: Partial<Database['public']['Tables']['form_question_rows']['Insert']>;

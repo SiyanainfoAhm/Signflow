@@ -19,8 +19,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '../lib/supabase';
-import { fetchForm, fetchFormSteps, createFormInstance, updateForm } from '../lib/formEngine';
-import { uploadFormCoverImage } from '../lib/storage';
+import { fetchForm, fetchFormSteps, createFormInstance, updateForm, ensureTaskSectionsForForm } from '../lib/formEngine';
+import { uploadFormCoverImage, uploadRowImage } from '../lib/storage';
 import type { Form, FormStep, FormSection, FormQuestion } from '../types/database';
 import { Card } from '../components/ui/Card';
 import { Loader } from '../components/ui/Loader';
@@ -30,6 +30,8 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { Checkbox } from '../components/ui/Checkbox';
+import { TaskInstructionsModal, type TaskInstructionsData } from '../components/form-fill/TaskInstructionsModal';
+import { SectionInstructionsEditor } from '../components/form-fill/SectionInstructionsEditor';
 import { cn } from '../components/utils/cn';
 
 const QUESTION_TYPES = [
@@ -178,7 +180,15 @@ const PDF_RENDER_MODES = [
   { value: 'assessment_submission', label: 'Assessment Submission' },
   { value: 'reasonable_adjustment', label: 'Reasonable Adjustment' },
   { value: 'declarations', label: 'Declarations' },
+  { value: 'task_instructions', label: 'Task Instructions' },
+  { value: 'task_questions', label: 'Task Questions' },
+  { value: 'task_results', label: 'Task Results' },
 ];
+
+interface AssessmentTaskRow {
+  id: number;
+  row_label: string;
+}
 
 function SortableSectionItem({
   section,
@@ -186,16 +196,20 @@ function SortableSectionItem({
   onSelect,
   onUpdate,
   onPdfModeChange,
+  onAssessmentTaskRowChange,
   onRemove,
   canDelete = true,
+  assessmentTaskRows = [],
 }: {
   section: FormSection & { questions: FormQuestion[] };
   isSelected: boolean;
   onSelect: () => void;
   onUpdate: (title: string) => void;
   onPdfModeChange: (mode: string) => void;
+  onAssessmentTaskRowChange?: (rowId: number | null) => void;
   onRemove: () => void;
   canDelete?: boolean;
+  assessmentTaskRows?: AssessmentTaskRow[];
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(section.title);
@@ -250,12 +264,20 @@ function SortableSectionItem({
           </div>
         )}
         {isSelected && (
-          <div onClick={(e) => e.stopPropagation()} className="mt-2">
+          <div onClick={(e) => e.stopPropagation()} className="mt-2 space-y-2">
             <Select
               value={section.pdf_render_mode}
               onChange={onPdfModeChange}
               options={PDF_RENDER_MODES}
             />
+            {(section.pdf_render_mode === 'task_instructions' || section.pdf_render_mode === 'task_questions' || section.pdf_render_mode === 'task_results') && assessmentTaskRows.length > 0 && (
+              <Select
+                label="Link to task"
+                value={String((section as { assessment_task_row_id?: number | null }).assessment_task_row_id ?? '')}
+                onChange={(v) => onAssessmentTaskRowChange?.(v ? Number(v) : null)}
+                options={[{ value: '', label: '— Select task —' }, ...assessmentTaskRows.map((r) => ({ value: String(r.id), label: r.row_label }))]}
+              />
+            )}
           </div>
         )}
       </div>
@@ -348,8 +370,31 @@ export const AdminFormBuilderPage: React.FC = () => {
   const [previewing, setPreviewing] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<{ type: 'step' | 'section' | 'question'; id: number } | null>(null);
+  const [assessmentTaskRows, setAssessmentTaskRows] = useState<AssessmentTaskRow[]>([]);
   const navigate = useNavigate();
   const coverInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchAssessmentTaskRows = async () => {
+      for (const step of steps) {
+        const sec = step.sections.find((s) => s.pdf_render_mode === 'assessment_tasks');
+        if (!sec) continue;
+        const gridQ = sec.questions.find((q) => q.type === 'grid_table');
+        if (!gridQ) continue;
+        const { data } = await supabase
+          .from('skyline_form_question_rows')
+          .select('id, row_label')
+          .eq('question_id', gridQ.id)
+          .order('sort_order');
+        setAssessmentTaskRows((data as AssessmentTaskRow[]) || []);
+        break;
+      }
+      if (!steps.some((s) => s.sections.some((sec) => sec.pdf_render_mode === 'assessment_tasks'))) {
+        setAssessmentTaskRows([]);
+      }
+    };
+    fetchAssessmentTaskRows();
+  }, [steps]);
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -385,6 +430,7 @@ export const AdminFormBuilderPage: React.FC = () => {
 
   const loadData = useCallback(async () => {
     if (!formId) return;
+    await ensureTaskSectionsForForm(Number(formId));
     const f = await fetchForm(Number(formId));
     setForm(f || null);
     const stepList = await fetchFormSteps(Number(formId));
@@ -779,6 +825,8 @@ export const AdminFormBuilderPage: React.FC = () => {
                       onSelect={() => setSelectedSectionId(sec.id)}
                       onUpdate={(title) => updateSection(sec.id, { title })}
                       onPdfModeChange={(mode) => updateSection(sec.id, { pdf_render_mode: mode })}
+                      onAssessmentTaskRowChange={(rowId) => updateSection(sec.id, { assessment_task_row_id: rowId })}
+                      assessmentTaskRows={assessmentTaskRows}
                       onRemove={() => removeSection(sec.id)}
                       canDelete={!isPrebuiltSection(sec.title)}
                     />
@@ -791,44 +839,69 @@ export const AdminFormBuilderPage: React.FC = () => {
           )}
         </div>
 
-        {/* Right: Questions + Editor */}
+        {/* Right: Content (Questions or Instructions) + Editor */}
         <div className="flex-1 flex overflow-hidden">
           <div className="w-72 border-r border-[var(--border)] bg-white p-4 overflow-y-auto">
             <div className="flex justify-between items-center mb-3">
-              <h2 className="font-semibold text-sm">Questions</h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={addQuestion}
-                disabled={!selectedSectionId}
-              >
-                + Add
-              </Button>
+              <h2 className="font-semibold text-sm">
+                {selectedSection?.pdf_render_mode === 'task_instructions'
+                  ? 'Instructions'
+                  : selectedSection?.pdf_render_mode === 'task_questions'
+                    ? 'Questions to answer'
+                    : selectedSection?.pdf_render_mode === 'task_results'
+                      ? 'Results'
+                      : 'Questions'}
+              </h2>
+              {(selectedSection?.pdf_render_mode === 'task_questions' || !['task_instructions', 'task_questions', 'task_results'].includes(selectedSection?.pdf_render_mode || '')) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={addQuestion}
+                  disabled={!selectedSectionId}
+                >
+                  + Add
+                </Button>
+              )}
             </div>
             {selectedSection ? (
-              <DndContext sensors={questionSensors} collisionDetection={closestCenter} onDragEnd={handleQuestionsDragEnd}>
-                <SortableContext items={selectedSection.questions.map((q) => `question-${q.id}`)} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-1">
-                    {selectedSection.questions.map((q) => (
-                      <SortableQuestionItem
-                        key={q.id}
-                        question={q}
-                        isSelected={editingQuestionId === q.id}
-                        onSelect={() => setEditingQuestionId(q.id)}
-                        onRemove={() => removeQuestion(q.id)}
-                        canDelete={!isPrebuiltQuestion(q)}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
+              selectedSection.pdf_render_mode === 'task_instructions' ? (
+                <p className="text-sm text-gray-600">
+                  Instructions students will read before answering. Use the editor on the right to add content.
+                </p>
+              ) : selectedSection.pdf_render_mode === 'task_results' ? (
+                <p className="text-sm text-gray-600">
+                  Results sheet for trainer/assessor to record outcomes.
+                </p>
+              ) : (
+                <DndContext sensors={questionSensors} collisionDetection={closestCenter} onDragEnd={handleQuestionsDragEnd}>
+                  <SortableContext items={selectedSection.questions.map((q) => `question-${q.id}`)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-1">
+                      {selectedSection.questions.map((q) => (
+                        <SortableQuestionItem
+                          key={q.id}
+                          question={q}
+                          isSelected={editingQuestionId === q.id}
+                          onSelect={() => setEditingQuestionId(q.id)}
+                          onRemove={() => removeQuestion(q.id)}
+                          canDelete={!isPrebuiltQuestion(q)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )
             ) : (
               <p className="text-sm text-gray-500">Select a section</p>
             )}
           </div>
 
           <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
-            {editingQuestionId && selectedSection && (() => {
+            {selectedSection?.pdf_render_mode === 'task_instructions' ? (
+              <SectionInstructionsEditor
+                section={selectedSection}
+                onSaved={loadData}
+              />
+            ) : editingQuestionId && selectedSection ? (() => {
               const q = selectedSection.questions.find((x) => x.id === editingQuestionId);
               if (!q) return null;
               const rv = (q.role_visibility as Record<string, boolean>) || {};
@@ -898,30 +971,111 @@ export const AdminFormBuilderPage: React.FC = () => {
                     {(q.type === 'single_choice' || q.type === 'multi_choice' || q.type === 'yes_no') && (
                       <QuestionOptionsEditor questionId={q.id} />
                     )}
-                    {(q.type === 'likert_5' || q.type === 'grid_table') && (
-                      <QuestionRowsEditor questionId={q.id} sectionPdfMode={selectedSection?.pdf_render_mode} />
-                    )}
                     {q.type === 'grid_table' && (
-                      <div>
-                        <div className="text-sm font-semibold mb-2">PDF Columns (comma-separated)</div>
-                        <Input
-                          value={((pm.columns as string[]) || []).join(', ')}
-                          onChange={(e) =>
-                            updateQuestion(q.id, {
-                              pdf_meta: {
-                                ...pm,
-                                columns: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
-                              },
-                            })
-                          }
-                          placeholder="Perimeter Formula, Example"
-                        />
+                      <div className="space-y-3 mb-4">
+                        <div className="text-sm font-semibold text-gray-700">1. Table layout</div>
+                        <div>
+                          <Select
+                            value={(pm.layout as string) || 'default'}
+                            onChange={(v) =>
+                              updateQuestion(q.id, {
+                                pdf_meta: { ...pm, layout: v },
+                              })
+                            }
+                            options={[
+                              { value: 'default', label: 'Default (image + label in first column)' },
+                              { value: 'no_image', label: 'No image (header 1st | header 2nd | input columns)' },
+                              { value: 'split', label: 'Layout 1 (name | image | input columns – for polygon, measurement, etc.)' },
+                            ]}
+                          />
+                        </div>
+                        {((pm.layout as string) === 'no_image' || (pm.layout as string) === 'split') && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              label="1st column header"
+                              value={(pm.firstColumnLabel as string) || ((pm.layout as string) === 'no_image' ? 'Item' : 'Name')}
+                              onChange={(e) =>
+                                updateQuestion(q.id, {
+                                  pdf_meta: { ...pm, firstColumnLabel: e.target.value || ((pm.layout as string) === 'no_image' ? 'Item' : 'Name') },
+                                })
+                              }
+                              placeholder={(pm.layout as string) === 'no_image' ? 'e.g. Question, Item' : 'e.g. Polygon Name, Measurement'}
+                            />
+                            <Input
+                              label="2nd column header"
+                              value={(pm.secondColumnLabel as string) || ((pm.layout as string) === 'no_image' ? 'Description' : 'Image')}
+                              onChange={(e) =>
+                                updateQuestion(q.id, {
+                                  pdf_meta: { ...pm, secondColumnLabel: e.target.value || ((pm.layout as string) === 'no_image' ? 'Description' : 'Image') },
+                                })
+                              }
+                              placeholder={(pm.layout as string) === 'no_image' ? 'e.g. Description, Details' : 'e.g. Polygon Shape, Diagram'}
+                            />
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-sm font-semibold mb-2">Input columns (comma-separated)</div>
+                          <Input
+                            value={((pm.columns as string[]) || []).join(', ')}
+                            onChange={(e) =>
+                              updateQuestion(q.id, {
+                                pdf_meta: {
+                                  ...pm,
+                                  columns: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                                },
+                              })
+                            }
+                            placeholder="e.g. Perimeter Formula, Example or Formula, Calculation"
+                          />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold mb-2">Column type (question = display only, answer = user input)</div>
+                          <p className="text-xs text-gray-600 mb-2">
+                            Set each column as <strong>question</strong> (read-only, shows row description) or <strong>answer</strong> (user fills in). Comma-separated, same order as columns.
+                          </p>
+                          <Input
+                            value={((pm.columnTypes as string[]) || []).join(', ')}
+                            onChange={(e) =>
+                              updateQuestion(q.id, {
+                                pdf_meta: {
+                                  ...pm,
+                                  columnTypes: e.target.value.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+                                },
+                              })
+                            }
+                            placeholder="e.g. answer, answer or question, answer"
+                          />
+                        </div>
                       </div>
+                    )}
+                    {(q.type === 'likert_5' || q.type === 'grid_table') && (
+                      <>
+                        {q.type === 'grid_table' && <div className="text-sm font-semibold text-gray-700 mb-2">2. Table rows</div>}
+                        <QuestionRowsEditor
+                          questionId={q.id}
+                          sectionPdfMode={selectedSection?.pdf_render_mode}
+                          formId={formId ? Number(formId) : null}
+                          steps={steps}
+                          onStepsCreated={loadData}
+                          gridTableLayout={q.type === 'grid_table' ? ((q.pdf_meta as Record<string, unknown>)?.layout as string) : undefined}
+                        />
+                      </>
                     )}
                   </div>
                 </Card>
               );
-            })()}
+            })() : selectedSection?.pdf_render_mode === 'task_results' ? (
+              <Card>
+                <h3 className="font-bold mb-2">Results sheet</h3>
+                <p className="text-sm text-gray-600">
+                  This section shows the results template (Satisfactory/Not Satisfactory, feedback, signatures) for the trainer/assessor to complete. No editing needed here.
+                </p>
+              </Card>
+            ) : selectedSection && !editingQuestionId ? (
+              <p className="text-sm text-gray-500">Select a question to edit, or click + Add to create one</p>
+            ) : !selectedSection ? (
+              <p className="text-sm text-gray-500">Select a section</p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -997,8 +1151,20 @@ function QuestionOptionsEditor({ questionId }: { questionId: number }) {
   );
 }
 
-function QuestionRowsEditor({ questionId, sectionPdfMode }: { questionId: number; sectionPdfMode?: string }) {
-  const [rows, setRows] = useState<{ id: number; row_label: string; row_help: string | null; row_image_url: string | null; sort_order: number }[]>([]);
+interface QuestionRow {
+  id: number;
+  row_label: string;
+  row_help: string | null;
+  row_image_url: string | null;
+  row_meta?: Record<string, unknown> | null;
+  sort_order: number;
+}
+
+function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onStepsCreated, gridTableLayout }: { questionId: number; sectionPdfMode?: string; formId?: number | null; steps?: { sort_order: number }[]; onStepsCreated?: () => void; gridTableLayout?: string }) {
+  const [rows, setRows] = useState<QuestionRow[]>([]);
+  const [instructionsModalRow, setInstructionsModalRow] = useState<QuestionRow | null>(null);
+  const [uploadingRowId, setUploadingRowId] = useState<number | null>(null);
+
   useEffect(() => {
     supabase
       .from('skyline_form_question_rows')
@@ -1009,27 +1175,66 @@ function QuestionRowsEditor({ questionId, sectionPdfMode }: { questionId: number
   }, [questionId]);
 
   const addRow = async () => {
+    const defaultLabel = isAssessmentTasks ? 'New task' : 'New row';
     const { data } = await supabase
       .from('skyline_form_question_rows')
-      .insert({ question_id: questionId, row_label: 'New row', sort_order: rows.length })
+      .insert({ question_id: questionId, row_label: defaultLabel, sort_order: rows.length })
       .select('*')
       .single();
-    if (data) setRows((prev) => [...prev, data]);
+    if (data) {
+      setRows((prev) => [...prev, data]);
+      if (sectionPdfMode === 'assessment_tasks' && formId && onStepsCreated) {
+        const row = data as QuestionRow;
+        const maxStepOrder = steps?.length ? Math.max(...steps.map((s) => s.sort_order), 0) : 0;
+        const { data: taskStep } = await supabase
+          .from('skyline_form_steps')
+          .insert({ form_id: formId, title: row.row_label, subtitle: 'Instructions, Questions & Results', sort_order: maxStepOrder + 1 })
+          .select('id')
+          .single();
+        if (taskStep) {
+          const taskStepId = (taskStep as { id: number }).id;
+          await supabase.from('skyline_form_sections').insert([
+            { step_id: taskStepId, title: 'Student Instructions', pdf_render_mode: 'task_instructions', assessment_task_row_id: row.id, sort_order: 0 },
+            { step_id: taskStepId, title: 'Questions', pdf_render_mode: 'task_questions', assessment_task_row_id: row.id, sort_order: 1 },
+            { step_id: taskStepId, title: 'Results', pdf_render_mode: 'task_results', assessment_task_row_id: row.id, sort_order: 2 },
+          ]);
+          onStepsCreated();
+        }
+      }
+    }
   };
 
-  const updateRow = async (id: number, updates: { row_label?: string; row_help?: string | null; row_image_url?: string | null }) => {
+  const updateRow = async (id: number, updates: Partial<QuestionRow>) => {
     await supabase.from('skyline_form_question_rows').update(updates).eq('id', id);
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
+  };
+
+  const saveInstructions = async (rowId: number, data: TaskInstructionsData) => {
+    const row_meta = { instructions: data };
+    await updateRow(rowId, { row_meta });
   };
 
   const isAssessmentTasks = sectionPdfMode === 'assessment_tasks';
 
   return (
     <div>
-      <div className="text-sm font-semibold mb-2">Rows</div>
+      <div className="text-sm font-semibold mb-2">{isAssessmentTasks ? 'Assessment tasks' : 'Table rows'}</div>
+      {isAssessmentTasks ? (
+        <p className="text-xs text-gray-600 mb-3">
+          Each task automatically gets <strong>Instructions</strong>, <strong>Questions</strong>, and <strong>Results</strong> sections. Click <strong>Edit instructions</strong> to add content. Add questions in the task&apos;s Questions section.
+        </p>
+      ) : gridTableLayout === 'no_image' ? (
+        <p className="text-xs text-gray-600 mb-3">
+          Each row = one table row. <strong>Row label</strong> → 1st column. <strong>Description</strong> → 2nd column. Add input columns in Table layout below.
+        </p>
+      ) : (
+        <p className="text-xs text-gray-600 mb-3">
+          Each row = one table row. <strong>Row label</strong> = first column (e.g. Polygon Name). <strong>Image</strong> = optional (upload or URL). <strong>Description</strong> = for question-type columns.
+        </p>
+      )}
       <div className="space-y-2">
         {rows.map((r) => (
-          <div key={r.id} className="flex flex-col gap-2">
+          <div key={r.id} className="flex flex-col gap-2 p-2 rounded border border-gray-200">
             <div className="flex gap-2 items-center">
               <Input
                 value={r.row_label}
@@ -1037,15 +1242,55 @@ function QuestionRowsEditor({ questionId, sectionPdfMode }: { questionId: number
                 placeholder={isAssessmentTasks ? 'Evidence number (e.g. Assessment task 1)' : 'Row label'}
                 className="flex-1"
               />
-              {!isAssessmentTasks && (
-                <Input
-                  value={r.row_image_url || ''}
-                  onChange={(e) => updateRow(r.id, { row_image_url: e.target.value || null })}
-                  placeholder="Image URL"
-                  className="w-40"
-                />
+              {!isAssessmentTasks && gridTableLayout !== 'no_image' && (
+                <div className="flex items-center gap-2 min-w-0">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id={`row-image-${r.id}`}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !formId) return;
+                      setUploadingRowId(r.id);
+                      const { url, error } = await uploadRowImage(formId, questionId, r.id, file);
+                      setUploadingRowId(null);
+                      e.target.value = '';
+                      if (error) alert(`Upload failed: ${error}`);
+                      else if (url) updateRow(r.id, { row_image_url: url });
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!formId || uploadingRowId === r.id}
+                    onClick={() => document.getElementById(`row-image-${r.id}`)?.click()}
+                  >
+                    {uploadingRowId === r.id ? 'Uploading…' : <ImagePlus className="w-4 h-4" />}
+                  </Button>
+                  <Input
+                    value={r.row_image_url || ''}
+                    onChange={(e) => updateRow(r.id, { row_image_url: e.target.value || null })}
+                    placeholder="Or paste image URL"
+                    className="w-40"
+                  />
+                </div>
+              )}
+              {isAssessmentTasks && (
+                <Button variant="outline" size="sm" onClick={() => setInstructionsModalRow(r)}>
+                  Edit instructions
+                </Button>
               )}
             </div>
+            {!isAssessmentTasks && (
+              <Textarea
+                value={r.row_help || ''}
+                onChange={(e) => updateRow(r.id, { row_help: e.target.value || null })}
+                placeholder={gridTableLayout === 'no_image' ? '2nd column content (e.g. question or description)' : 'Description / question text (for 2nd column or question-type columns)'}
+                rows={2}
+                className="text-sm"
+              />
+            )}
             {isAssessmentTasks && (
               <Textarea
                 value={r.row_help || ''}
@@ -1061,6 +1306,15 @@ function QuestionRowsEditor({ questionId, sectionPdfMode }: { questionId: number
       <Button variant="outline" size="sm" onClick={addRow} className="mt-2">
         + Add row
       </Button>
+      {instructionsModalRow && (
+        <TaskInstructionsModal
+          isOpen={!!instructionsModalRow}
+          onClose={() => setInstructionsModalRow(null)}
+          rowLabel={instructionsModalRow.row_label}
+          initialData={(instructionsModalRow.row_meta as { instructions?: TaskInstructionsData })?.instructions}
+          onSave={(data) => saveInstructions(instructionsModalRow.id, data)}
+        />
+      )}
     </div>
   );
 }

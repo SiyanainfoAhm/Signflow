@@ -17,6 +17,7 @@ export interface FormStepWithSections extends FormStep {
 
 export interface FormSectionWithQuestions extends FormSection {
   questions: FormQuestionWithOptionsAndRows[];
+  taskRow?: FormQuestionRow | null;
 }
 
 export interface FormQuestionWithOptionsAndRows extends FormQuestion {
@@ -44,9 +45,122 @@ export async function fetchForm(formId: number): Promise<Form | null> {
   return data as Form;
 }
 
-export async function updateForm(formId: number, updates: Partial<Pick<Form, 'name' | 'version' | 'unit_code' | 'header_asset_url' | 'cover_asset_url'>>): Promise<{ error: Error | null }> {
+export async function updateForm(formId: number, updates: Partial<Pick<Form, 'name' | 'version' | 'unit_code' | 'unit_name' | 'qualification_code' | 'qualification_name' | 'header_asset_url' | 'cover_asset_url'>>): Promise<{ error: Error | null }> {
   const { error } = await supabase.from('skyline_forms').update(updates).eq('id', formId);
   return { error: error ? new Error(error.message) : null };
+}
+
+/** Migrate task sections from intro step to their own steps (for forms created with old structure). */
+async function migrateTaskSectionsToSteps(formId: number, introStepId: number): Promise<number> {
+  const { data: taskSections } = await supabase
+    .from('skyline_form_sections')
+    .select('id, assessment_task_row_id, pdf_render_mode, sort_order')
+    .eq('step_id', introStepId)
+    .not('assessment_task_row_id', 'is', null);
+  if (!taskSections || taskSections.length === 0) return 0;
+
+  const byRow = new Map<number, { id: number; pdf_render_mode: string; sort_order: number }[]>();
+  for (const s of taskSections as { id: number; assessment_task_row_id: number; pdf_render_mode: string; sort_order: number }[]) {
+    if (!byRow.has(s.assessment_task_row_id)) byRow.set(s.assessment_task_row_id, []);
+    byRow.get(s.assessment_task_row_id)!.push({ id: s.id, pdf_render_mode: s.pdf_render_mode, sort_order: s.sort_order });
+  }
+
+  const { data: rows } = await supabase
+    .from('skyline_form_question_rows')
+    .select('id, row_label')
+    .in('id', Array.from(byRow.keys()));
+  const rowMap = new Map((rows as { id: number; row_label: string }[])?.map((r) => [r.id, r]) || []);
+
+  const { data: steps } = await supabase.from('skyline_form_steps').select('sort_order').eq('form_id', formId);
+  const maxOrder = steps?.length ? Math.max(...(steps as { sort_order: number }[]).map((s) => s.sort_order), 0) : 0;
+  let nextOrder = maxOrder + 1;
+  let migrated = 0;
+
+  for (const [rowId, secs] of byRow) {
+    const row = rowMap.get(rowId);
+    if (!row || secs.length < 3) continue;
+    const { data: taskStep } = await supabase
+      .from('skyline_form_steps')
+      .insert({ form_id: formId, title: row.row_label, subtitle: 'Instructions, Questions & Results', sort_order: nextOrder++ })
+      .select('id')
+      .single();
+    if (!taskStep) continue;
+    const taskStepId = (taskStep as { id: number }).id;
+    const orderMap: Record<string, number> = { task_instructions: 0, task_questions: 1, task_results: 2 };
+    for (const sec of secs) {
+      await supabase.from('skyline_form_sections').update({ step_id: taskStepId, sort_order: orderMap[sec.pdf_render_mode] ?? sec.sort_order }).eq('id', sec.id);
+    }
+    migrated++;
+  }
+  return migrated;
+}
+
+/** Create a separate step (Instructions, Questions, Results) for each assessment task row that doesn't have one. Call for existing forms. */
+export async function ensureTaskSectionsForForm(formId: number): Promise<{ created: number }> {
+  const steps = await fetchFormSteps(formId);
+  const introStep = steps.find((s) => s.title === 'Introductory Details' || s.subtitle?.includes('Student'));
+  if (!introStep) return { created: 0 };
+
+  const migrated = await migrateTaskSectionsToSteps(formId, introStep.id);
+  if (migrated > 0) return { created: migrated };
+
+  const { data: sections } = await supabase
+    .from('skyline_form_sections')
+    .select('*')
+    .eq('step_id', introStep.id)
+    .order('sort_order');
+  const assessmentTasksSection = (sections as { id: number; pdf_render_mode: string }[])?.find((s) => s.pdf_render_mode === 'assessment_tasks');
+  if (!assessmentTasksSection) return { created: 0 };
+
+  const { data: taskQuestion } = await supabase
+    .from('skyline_form_questions')
+    .select('id')
+    .eq('section_id', assessmentTasksSection.id)
+    .eq('type', 'grid_table')
+    .single();
+  if (!taskQuestion) return { created: 0 };
+
+  const { data: rows } = await supabase
+    .from('skyline_form_question_rows')
+    .select('id, row_label')
+    .eq('question_id', (taskQuestion as { id: number }).id)
+    .order('sort_order');
+  const taskRows = (rows as { id: number; row_label: string }[]) || [];
+  if (taskRows.length === 0) return { created: 0 };
+
+  const { data: existingSections } = await supabase
+    .from('skyline_form_sections')
+    .select('step_id, assessment_task_row_id')
+    .not('assessment_task_row_id', 'is', null);
+  const stepIds = new Set((steps as { id: number }[]).map((s) => s.id));
+  const linkedRowIds = new Set(
+    ((existingSections as { step_id: number; assessment_task_row_id: number }[]) || [])
+      .filter((s) => stepIds.has(s.step_id))
+      .map((s) => s.assessment_task_row_id)
+  );
+
+  let created = 0;
+  const maxStepOrder = steps.length > 0 ? Math.max(...(steps as { sort_order: number }[]).map((s) => s.sort_order), 0) : 0;
+  let nextStepOrder = maxStepOrder + 1;
+
+  for (const row of taskRows) {
+    if (linkedRowIds.has(row.id)) continue;
+    const { data: taskStep } = await supabase
+      .from('skyline_form_steps')
+      .insert({ form_id: formId, title: row.row_label, subtitle: 'Instructions, Questions & Results', sort_order: nextStepOrder++ })
+      .select('id')
+      .single();
+    if (taskStep) {
+      const taskStepId = (taskStep as { id: number }).id;
+      await supabase.from('skyline_form_sections').insert([
+        { step_id: taskStepId, title: 'Student Instructions', pdf_render_mode: 'task_instructions', assessment_task_row_id: row.id, sort_order: 0 },
+        { step_id: taskStepId, title: 'Questions', pdf_render_mode: 'task_questions', assessment_task_row_id: row.id, sort_order: 1 },
+        { step_id: taskStepId, title: 'Results', pdf_render_mode: 'task_results', assessment_task_row_id: row.id, sort_order: 2 },
+      ]);
+      created += 1;
+    }
+  }
+  return { created };
 }
 
 export async function fetchFormSteps(formId: number): Promise<FormStep[]> {
@@ -91,6 +205,17 @@ export async function fetchTemplateForInstance(instanceId: number): Promise<Form
 
     const sectionsWithQuestions: FormSectionWithQuestions[] = [];
     for (const section of sectionsList) {
+      const sec = section as FormSection & { assessment_task_row_id?: number | null };
+      let taskRow: FormQuestionRow | null = null;
+      if (sec.assessment_task_row_id) {
+        const { data: row } = await supabase
+          .from('skyline_form_question_rows')
+          .select('*')
+          .eq('id', sec.assessment_task_row_id)
+          .single();
+        taskRow = (row as FormQuestionRow) || null;
+      }
+
       const { data: questions } = await supabase
         .from('skyline_form_questions')
         .select('*')
@@ -116,7 +241,7 @@ export async function fetchTemplateForInstance(instanceId: number): Promise<Form
           rows: (rows as FormQuestionRow[]) || [],
         });
       }
-      sectionsWithQuestions.push({ ...section, questions: questionsWithExtras });
+      sectionsWithQuestions.push({ ...section, questions: questionsWithExtras, taskRow: taskRow ?? undefined });
     }
     stepsWithSections.push({ ...step, sections: sectionsWithQuestions });
   }
@@ -134,6 +259,205 @@ export async function fetchAnswersForInstance(instanceId: number): Promise<FormA
     return [];
   }
   return (data as FormAnswer[]) || [];
+}
+
+export interface ResultsOfficeEntry {
+  section_id: number;
+  entered_date: string | null;
+  entered_by: string | null;
+}
+
+export interface ResultsDataEntry {
+  section_id: number;
+  first_attempt_satisfactory: string | null;
+  first_attempt_date: string | null;
+  first_attempt_feedback: string | null;
+  second_attempt_satisfactory: string | null;
+  second_attempt_date: string | null;
+  second_attempt_feedback: string | null;
+  trainer_name: string | null;
+  trainer_signature: string | null;
+  trainer_date: string | null;
+}
+
+export async function fetchResultsData(instanceId: number): Promise<Record<number, ResultsDataEntry>> {
+  const { data, error } = await supabase
+    .from('skyline_form_results_data')
+    .select('section_id, first_attempt_satisfactory, first_attempt_date, first_attempt_feedback, second_attempt_satisfactory, second_attempt_date, second_attempt_feedback, trainer_name, trainer_signature, trainer_date')
+    .eq('instance_id', instanceId);
+  if (error) {
+    console.error('fetchResultsData error', error);
+    return {};
+  }
+  const out: Record<number, ResultsDataEntry> = {};
+  for (const row of (data as Record<string, unknown>[]) || []) {
+    const sid = row.section_id as number;
+    out[sid] = {
+      section_id: sid,
+      first_attempt_satisfactory: (row.first_attempt_satisfactory as string) ?? null,
+      first_attempt_date: (row.first_attempt_date as string) ?? null,
+      first_attempt_feedback: (row.first_attempt_feedback as string) ?? null,
+      second_attempt_satisfactory: (row.second_attempt_satisfactory as string) ?? null,
+      second_attempt_date: (row.second_attempt_date as string) ?? null,
+      second_attempt_feedback: (row.second_attempt_feedback as string) ?? null,
+      trainer_name: (row.trainer_name as string) ?? null,
+      trainer_signature: (row.trainer_signature as string) ?? null,
+      trainer_date: (row.trainer_date as string) ?? null,
+    };
+  }
+  return out;
+}
+
+export async function saveResultsData(
+  instanceId: number,
+  sectionId: number,
+  data: Partial<Omit<ResultsDataEntry, 'section_id'>>
+): Promise<void> {
+  const { error } = await supabase.from('skyline_form_results_data').upsert(
+    {
+      instance_id: instanceId,
+      section_id: sectionId,
+      ...data,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'instance_id,section_id' }
+  );
+  if (error) console.error('saveResultsData error', error);
+}
+
+export async function fetchResultsOffice(instanceId: number): Promise<Record<number, ResultsOfficeEntry>> {
+  const { data, error } = await supabase
+    .from('skyline_form_results_office')
+    .select('section_id, entered_date, entered_by')
+    .eq('instance_id', instanceId);
+  if (error) {
+    console.error('fetchResultsOffice error', error);
+    return {};
+  }
+  const out: Record<number, ResultsOfficeEntry> = {};
+  for (const row of (data as { section_id: number; entered_date: string | null; entered_by: string | null }[]) || []) {
+    out[row.section_id] = {
+      section_id: row.section_id,
+      entered_date: row.entered_date,
+      entered_by: row.entered_by,
+    };
+  }
+  return out;
+}
+
+export async function saveResultsOffice(
+  instanceId: number,
+  sectionId: number,
+  enteredDate: string | null,
+  enteredBy: string | null
+): Promise<void> {
+  const { error } = await supabase.from('skyline_form_results_office').upsert(
+    {
+      instance_id: instanceId,
+      section_id: sectionId,
+      entered_date: enteredDate,
+      entered_by: enteredBy,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'instance_id,section_id' }
+  );
+  if (error) console.error('saveResultsOffice error', error);
+}
+
+export interface AssessmentSummaryDataEntry {
+  start_date: string | null;
+  end_date: string | null;
+  final_attempt_1_result: string | null;
+  final_attempt_2_result: string | null;
+  final_attempt_3_result: string | null;
+  trainer_sig_1: string | null;
+  trainer_date_1: string | null;
+  trainer_sig_2: string | null;
+  trainer_date_2: string | null;
+  trainer_sig_3: string | null;
+  trainer_date_3: string | null;
+  student_sig_1: string | null;
+  student_date_1: string | null;
+  student_sig_2: string | null;
+  student_date_2: string | null;
+  student_sig_3: string | null;
+  student_date_3: string | null;
+  student_overall_feedback: string | null;
+  admin_initials: string | null;
+}
+
+export async function fetchAssessmentSummaryData(instanceId: number): Promise<AssessmentSummaryDataEntry | null> {
+  const { data, error } = await supabase
+    .from('skyline_form_assessment_summary_data')
+    .select('*')
+    .eq('instance_id', instanceId)
+    .single();
+  if (error || !data) return null;
+  const r = data as Record<string, unknown>;
+  return {
+    start_date: (r.start_date as string) ?? null,
+    end_date: (r.end_date as string) ?? null,
+    final_attempt_1_result: (r.final_attempt_1_result as string) ?? null,
+    final_attempt_2_result: (r.final_attempt_2_result as string) ?? null,
+    final_attempt_3_result: (r.final_attempt_3_result as string) ?? null,
+    trainer_sig_1: (r.trainer_sig_1 as string) ?? null,
+    trainer_date_1: (r.trainer_date_1 as string) ?? null,
+    trainer_sig_2: (r.trainer_sig_2 as string) ?? null,
+    trainer_date_2: (r.trainer_date_2 as string) ?? null,
+    trainer_sig_3: (r.trainer_sig_3 as string) ?? null,
+    trainer_date_3: (r.trainer_date_3 as string) ?? null,
+    student_sig_1: (r.student_sig_1 as string) ?? null,
+    student_date_1: (r.student_date_1 as string) ?? null,
+    student_sig_2: (r.student_sig_2 as string) ?? null,
+    student_date_2: (r.student_date_2 as string) ?? null,
+    student_sig_3: (r.student_sig_3 as string) ?? null,
+    student_date_3: (r.student_date_3 as string) ?? null,
+    student_overall_feedback: (r.student_overall_feedback as string) ?? null,
+    admin_initials: (r.admin_initials as string) ?? null,
+  };
+}
+
+export async function saveAssessmentSummaryData(
+  instanceId: number,
+  data: Partial<AssessmentSummaryDataEntry>
+): Promise<void> {
+  const { error } = await supabase.from('skyline_form_assessment_summary_data').upsert(
+    {
+      instance_id: instanceId,
+      ...data,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'instance_id' }
+  );
+  if (error) console.error('saveAssessmentSummaryData error', error);
+}
+
+export async function fetchTrainerAssessments(instanceId: number): Promise<Record<number, string>> {
+  const { data, error } = await supabase
+    .from('skyline_form_trainer_assessments')
+    .select('question_id, satisfactory')
+    .eq('instance_id', instanceId);
+  if (error) {
+    console.error('fetchTrainerAssessments error', error);
+    return {};
+  }
+  const out: Record<number, string> = {};
+  for (const row of (data as { question_id: number; satisfactory: string | null }[]) || []) {
+    if (row.satisfactory) out[row.question_id] = row.satisfactory;
+  }
+  return out;
+}
+
+export async function saveTrainerAssessment(
+  instanceId: number,
+  questionId: number,
+  satisfactory: 'yes' | 'no'
+): Promise<void> {
+  const { error } = await supabase.from('skyline_form_trainer_assessments').upsert(
+    { instance_id: instanceId, question_id: questionId, satisfactory, updated_at: new Date().toISOString() },
+    { onConflict: 'instance_id,question_id' }
+  );
+  if (error) console.error('saveTrainerAssessment error', error);
 }
 
 export async function saveAnswer(
@@ -227,7 +551,14 @@ const READ_ONLY_VISIBLE = { student: true, trainer: true, office: true };
 const READ_ONLY_EDIT = { student: false, trainer: false, office: false };
 const TRAINER_ONLY_EDIT = { student: false, trainer: true, office: false };
 
-async function createCompulsoryFormStructure(formId: number): Promise<void> {
+interface AssessmentTaskInput {
+  task1_label: string;
+  task1_method: string;
+  task2_label: string;
+  task2_method: string;
+}
+
+async function createCompulsoryFormStructure(formId: number, assessmentTasks?: AssessmentTaskInput): Promise<void> {
   // Single compulsory step: Student & Trainer, Qualification, Assessment Tasks, Assessment Submission
   // Subtitle "Student, trainer, qualification & assessment" is used only for this step; other steps keep their own titles/subtitles
   const { data: step } = await supabase
@@ -261,10 +592,10 @@ async function createCompulsoryFormStructure(formId: number): Promise<void> {
   if (sec2a) {
     const s = sec2a as { id: number };
     await supabase.from('skyline_form_questions').insert([
-      { section_id: s.id, type: 'short_text', code: 'qualification.code', label: 'Qualification Code', sort_order: 0, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES },
-      { section_id: s.id, type: 'short_text', code: 'qualification.name', label: 'Qualification Name', sort_order: 1, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES },
-      { section_id: s.id, type: 'short_text', code: 'unit.code', label: 'Unit Code', sort_order: 2, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES },
-      { section_id: s.id, type: 'short_text', code: 'unit.name', label: 'Unit Name', sort_order: 3, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES },
+      { section_id: s.id, type: 'short_text', code: 'qualification.code', label: 'Qualification Code', sort_order: 0, role_visibility: READ_ONLY_VISIBLE, role_editability: READ_ONLY_EDIT },
+      { section_id: s.id, type: 'short_text', code: 'qualification.name', label: 'Qualification Name', sort_order: 1, role_visibility: READ_ONLY_VISIBLE, role_editability: READ_ONLY_EDIT },
+      { section_id: s.id, type: 'short_text', code: 'unit.code', label: 'Unit Code', sort_order: 2, role_visibility: READ_ONLY_VISIBLE, role_editability: READ_ONLY_EDIT },
+      { section_id: s.id, type: 'short_text', code: 'unit.name', label: 'Unit Name', sort_order: 3, role_visibility: READ_ONLY_VISIBLE, role_editability: READ_ONLY_EDIT },
     ]);
   }
 
@@ -273,6 +604,7 @@ async function createCompulsoryFormStructure(formId: number): Promise<void> {
     .insert({ step_id: stepId, title: 'Assessment Tasks', description: 'The student must be assessed as satisfactory in each of the following assessment tasks in order to demonstrate competence.', pdf_render_mode: 'assessment_tasks', sort_order: 2 })
     .select('id')
     .single();
+  let taskRowIds: number[] = [];
   if (sec2b) {
     const s = sec2b as { id: number };
     const { data: q } = await supabase
@@ -282,10 +614,15 @@ async function createCompulsoryFormStructure(formId: number): Promise<void> {
       .single();
     if (q) {
       const qid = (q as { id: number }).id;
-      await supabase.from('skyline_form_question_rows').insert([
-        { question_id: qid, row_label: 'Assessment task 1', row_help: 'Written Assessment (WA)', sort_order: 0 },
-        { question_id: qid, row_label: 'Assessment task 2', row_help: 'Practical Task 2.1\nPractical Task 2.2\nPractical Task 2.3', sort_order: 1 },
-      ]);
+      const t1 = assessmentTasks ?? { task1_label: 'Assessment task 1', task1_method: 'Written Assessment (WA)', task2_label: 'Assessment task 2', task2_method: 'Practical Task 2.1\nPractical Task 2.2\nPractical Task 2.3' };
+      const rowsToInsert = [
+        { question_id: qid, row_label: t1.task1_label, row_help: t1.task1_method, sort_order: 0 },
+        { question_id: qid, row_label: t1.task2_label, row_help: t1.task2_method, sort_order: 1 },
+      ];
+      for (const row of rowsToInsert) {
+        const { data: inserted } = await supabase.from('skyline_form_question_rows').insert(row).select('id').single();
+        if (inserted) taskRowIds.push((inserted as { id: number }).id);
+      }
     }
   }
 
@@ -314,16 +651,71 @@ async function createCompulsoryFormStructure(formId: number): Promise<void> {
   }
 
   await createDefaultSectionsToStep(stepId, 4);
+
+  const { data: taskRows } = taskRowIds.length > 0
+    ? await supabase.from('skyline_form_question_rows').select('id, row_label').in('id', taskRowIds).order('sort_order')
+    : { data: [] };
+  const rows = (taskRows as { id: number; row_label: string }[]) || [];
+  let taskStepOrder = 1;
+  for (const row of rows) {
+    const { data: taskStep } = await supabase
+      .from('skyline_form_steps')
+      .insert({ form_id: formId, title: row.row_label, subtitle: 'Instructions, Questions & Results', sort_order: taskStepOrder++ })
+      .select('id')
+      .single();
+    if (taskStep) {
+      const taskStepId = (taskStep as { id: number }).id;
+      await supabase.from('skyline_form_sections').insert([
+        { step_id: taskStepId, title: 'Student Instructions', pdf_render_mode: 'task_instructions', assessment_task_row_id: row.id, sort_order: 0 },
+        { step_id: taskStepId, title: 'Questions', pdf_render_mode: 'task_questions', assessment_task_row_id: row.id, sort_order: 1 },
+        { step_id: taskStepId, title: 'Results', pdf_render_mode: 'task_results', assessment_task_row_id: row.id, sort_order: 2 },
+      ]);
+    }
+  }
+
+  // Assessment Summary Sheet (common, always after last assessment)
+  const { data: summaryStep } = await supabase
+    .from('skyline_form_steps')
+    .insert({ form_id: formId, title: 'Assessment Summary', subtitle: 'Final record of student competency', sort_order: taskStepOrder++ })
+    .select('id')
+    .single();
+  if (summaryStep) {
+    await supabase
+      .from('skyline_form_sections')
+      .insert({ step_id: (summaryStep as { id: number }).id, title: 'Assessment Summary Sheet', pdf_render_mode: 'assessment_summary', sort_order: 0 });
+  }
 }
 
-export async function createForm(name: string): Promise<Form | null> {
-  const { data, error } = await supabase.from('skyline_forms').insert({ name }).select('*').single();
+export interface CreateFormInput {
+  name: string;
+  qualification_code: string;
+  qualification_name: string;
+  unit_code: string;
+  unit_name: string;
+  assessment_task_1_label: string;
+  assessment_task_1_method: string;
+  assessment_task_2_label: string;
+  assessment_task_2_method: string;
+}
+
+export async function createForm(input: CreateFormInput): Promise<Form | null> {
+  const { name, qualification_code, qualification_name, unit_code, unit_name, assessment_task_1_label, assessment_task_1_method, assessment_task_2_label, assessment_task_2_method } = input;
+  const { data, error } = await supabase
+    .from('skyline_forms')
+    .insert({ name, qualification_code, qualification_name, unit_code, unit_name })
+    .select('*')
+    .single();
   if (error) {
     console.error('createForm error', error);
     return null;
   }
   const form = data as Form;
-  await createCompulsoryFormStructure(form.id);
+  await createCompulsoryFormStructure(form.id, {
+    task1_label: assessment_task_1_label,
+    task1_method: assessment_task_1_method,
+    task2_label: assessment_task_2_label,
+    task2_method: assessment_task_2_method,
+  });
   return form;
 }
 
