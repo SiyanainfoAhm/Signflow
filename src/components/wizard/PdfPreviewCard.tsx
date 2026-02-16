@@ -4,6 +4,7 @@ import { PdfDocument } from '../pdf/PdfDocument';
 import { useFormStore } from '../../store/formStore';
 import { FormDefinition } from '../../types/formDefinition';
 import { registerPdfFonts } from '../../utils/fontLoader';
+import { Loader } from '../ui/Loader';
 import formDefinitionData from '../../data/formDefinition.json';
 
 interface PdfPreviewCardProps {
@@ -187,8 +188,7 @@ export const PdfPreviewCard: React.FC<PdfPreviewCardProps> = ({ role }) => {
       <div className="p-2 md:p-4 bg-gray-100 min-h-[400px] md:min-h-[600px] flex items-center justify-center">
         {loading ? (
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 text-sm">Generating preview...</p>
+            <Loader variant="dots" size="lg" message="Generating preview..." />
           </div>
         ) : pdfUrl ? (
           <div className="w-full flex justify-center">

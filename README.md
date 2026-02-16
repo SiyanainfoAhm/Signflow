@@ -4,23 +4,21 @@ A React-based multi-page training evaluation form application with role-based pr
 
 ## Features
 
-- **Multi-page Form**: Schema-driven form engine that supports dynamic pages
-- **Role-based Privacy**: Student and Trainer roles with signature privacy (signatures hidden from opposite role)
-- **Signature Capture**: Canvas-based signature capture using `react-signature-canvas`
-- **PDF Generation**: Scalable PDF export using `@react-pdf/renderer` (supports 100+ pages)
-- **State Management**: Zustand with localStorage persistence
-- **Form Validation**: Zod + react-hook-form integration ready
-- **Responsive UI**: Tailwind CSS styling matching professional form layouts
+- **Form Builder Admin**: Create and edit forms with steps, sections, and questions. Drag-drop reordering with @dnd-kit.
+- **Form Fill App**: Role-based form filling with stepper UI, autosave (300ms debounce), and PDF preview.
+- **PDF Generation**: Server-side PDF via Node.js + Playwright (HTML → PDF). Skyline header layout, A4 pages.
+- **Supabase Backend**: Postgres tables with BIGINT PKs. No RLS (per spec).
+- **Question Types**: instruction_block, short_text, long_text, yes_no, single_choice, multi_choice, likert_5, grid_table, date, signature, page_break.
+- **Role Visibility/Editability**: Per-question toggles for student/trainer/office.
 
 ## Tech Stack
 
-- **React 18** + **TypeScript**
-- **Vite** (build tool)
-- **Zustand** (state management)
-- **@react-pdf/renderer** (PDF generation)
-- **react-signature-canvas** (signature capture)
+- **React 19** + **TypeScript** + **Vite**
 - **Tailwind CSS** (styling)
-- **Zod** + **react-hook-form** (validation - ready for integration)
+- **Supabase** (Postgres + Storage)
+- **React Hook Form** + **Zod** (validation)
+- **@dnd-kit** (drag-drop for builder)
+- **Playwright** (PDF rendering in pdf-server)
 
 ## Getting Started
 
@@ -30,13 +28,40 @@ A React-based multi-page training evaluation form application with role-based pr
 npm install
 ```
 
+### Environment Setup
+
+1. Copy `env.example` to `.env` and fill in your Supabase credentials:
+   - `VITE_SUPABASE_URL` - Your Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY` - Supabase anon/public key
+   - `SUPABASE_URL` - Same as above (for pdf-server)
+   - `SUPABASE_SERVICE_ROLE_KEY` - Service role key (for pdf-server only)
+   - `VITE_PDF_API_URL` - Leave empty to use Vite proxy; or set to `http://localhost:3001` for direct PDF server
+
+2. Run the Supabase migrations (in order):
+   - In Supabase Dashboard: SQL Editor → run `supabase/migrations/20250211000000_create_form_tables.sql`
+   - Then run `supabase/migrations/20250211000001_add_students.sql`
+
+3. Seed the database:
+```bash
+npm run seed
+```
+
 ### Development
 
+**Terminal 1 - React app:**
 ```bash
 npm run dev
 ```
-
 The app will be available at `http://localhost:5173`
+
+**Terminal 2 - PDF server (required for PDF preview/download):**
+```bash
+cd pdf-server
+npm install
+npx playwright install chromium
+npm run dev
+```
+PDF server runs on `http://localhost:3001`. The Vite dev server proxies `/pdf/*` to it.
 
 ### Build
 

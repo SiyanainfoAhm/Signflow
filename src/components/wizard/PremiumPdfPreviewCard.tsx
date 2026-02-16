@@ -14,8 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
-  Loader2,
 } from 'lucide-react';
+import { Loader } from '../ui/Loader';
 import formDefinitionData from '../../data/formDefinition.json';
 
 interface PremiumPdfPreviewCardProps {
@@ -260,7 +260,7 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
           >
             {loading ? (
               <>
-                <Loader2 className="w-3 sm:w-3.5 h-3 sm:h-3.5 animate-spin" />
+                <Loader variant="dots" size="sm" inline className="mr-1" />
                 <span className="hidden sm:inline">Generating...</span>
                 <span className="sm:hidden">Gen...</span>
               </>
@@ -298,8 +298,7 @@ export const PremiumPdfPreviewCard: React.FC<PremiumPdfPreviewCardProps> = ({ ro
       <div className="p-2 sm:p-4 bg-[var(--bg)] h-[300px] sm:h-[400px] md:h-[520px] flex items-center justify-center overflow-hidden relative">
         {loading ? (
           <div className="text-center px-4">
-            <Loader2 className="w-8 sm:w-10 h-8 sm:h-10 text-[var(--brand)] animate-spin mx-auto mb-2 sm:mb-3" />
-            <p className="text-gray-600 text-[10px] sm:text-xs font-medium">Generating preview...</p>
+            <Loader variant="dots" size="lg" message="Generating preview..." />
           </div>
         ) : error ? (
           <div className="text-center text-red-600 px-4">

@@ -2,7 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { exportPdf } from '../utils/pdfExport';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
-import { Download, Loader2 } from 'lucide-react';
+import { Download } from 'lucide-react';
+import { Loader } from './ui/Loader';
 import { Role } from '../types';
 
 interface PdfPreviewCardProps {
@@ -50,7 +51,7 @@ export const PdfPreviewCard: React.FC<PdfPreviewCardProps> = ({ role }) => {
       >
         {isGenerating ? (
           <>
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Loader variant="dots" size="sm" inline className="mr-2" />
             Generating...
           </>
         ) : (

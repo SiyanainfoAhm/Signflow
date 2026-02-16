@@ -9,6 +9,7 @@ interface CheckboxProps {
   disabled?: boolean;
   error?: string;
   className?: string;
+  labelClassName?: string;
 }
 
 export const Checkbox: React.FC<CheckboxProps> = ({
@@ -18,6 +19,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
   disabled,
   error,
   className,
+  labelClassName,
 }) => {
   const checkboxId = `checkbox-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -41,17 +43,17 @@ export const Checkbox: React.FC<CheckboxProps> = ({
           />
           <div
             className={cn(
-              'flex items-center justify-center w-5 h-5 sm:w-5 sm:h-5 rounded border-2 transition-all duration-200 touch-manipulation',
+              'flex items-center justify-center w-6 h-6 rounded-md border-2 transition-all duration-200 touch-manipulation shrink-0',
               checked
-                ? 'bg-[#F27A1A] border-[#F27A1A]'
-                : 'bg-white border-gray-300 group-hover:border-gray-400 active:border-gray-500',
-              disabled && 'group-hover:border-gray-300'
+                ? 'bg-[var(--brand)] border-[var(--brand)] shadow-sm'
+                : 'bg-white border-gray-500 group-hover:border-gray-600 active:border-gray-700',
+              disabled && 'group-hover:border-gray-500'
             )}
           >
-            {checked && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+            {checked && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
           </div>
         </div>
-        <span className="ml-2 sm:ml-3 text-xs sm:text-sm text-gray-700 leading-5 sm:leading-6">{label}</span>
+        <span className={cn('ml-2 sm:ml-3 text-xs sm:text-sm text-gray-700 leading-5 sm:leading-6', labelClassName)}>{label}</span>
       </label>
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
     </div>

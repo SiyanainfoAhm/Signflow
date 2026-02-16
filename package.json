@@ -7,19 +7,26 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "convert-logo": "node scripts/convert-logo-to-base64.js"
+    "convert-logo": "node scripts/convert-logo-to-base64.js",
+    "seed": "tsx scripts/seed-forms.ts"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.3",
+    "dotenv": "^17.2.4",
+    "tsx": "^4.19.2",
     "typescript": "~5.9.3",
     "vite": "^7.2.4"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.2.2",
     "@react-pdf/renderer": "^4.3.2",
+    "@supabase/supabase-js": "^2.49.1",
     "autoprefixer": "^10.4.24",
     "buffer": "^6.0.3",
     "lucide-react": "^0.563.0",
