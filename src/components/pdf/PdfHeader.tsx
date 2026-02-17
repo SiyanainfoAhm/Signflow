@@ -83,9 +83,6 @@ export const PdfHeader: React.FC = () => {
           <Text style={styles.orgSub}>INSTITUTE OF TECHNOLOGY</Text>
         </View>
         <View style={styles.right}>
-          <Text>Level 8</Text>
-          <Text>310 King Street</Text>
-          <Text>Melbourne VIC - 3000</Text>
           <Text>RTO: 45989 CRICOS: 04114B</Text>
           <Text style={styles.link}>Email: info@slit.edu.au</Text>
           <Text>Phone: +61 3 9125 1661</Text>

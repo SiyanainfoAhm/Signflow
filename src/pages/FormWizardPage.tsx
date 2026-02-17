@@ -1,9 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Suspense, lazy } from 'react';
 import { useFormStore } from '../store/formStore';
 import { FormDefinition, FormSection } from '../types/formDefinition';
 import { Stepper } from '../components/ui/Stepper';
 import { PremiumWizardNav } from '../components/wizard/PremiumWizardNav';
-import { PremiumPdfPreviewCard } from '../components/wizard/PremiumPdfPreviewCard';
 import { PremiumDetailsTable } from '../components/wizard/PremiumDetailsTable';
 import { PremiumLikertCardList } from '../components/wizard/PremiumLikertCardList';
 import { PremiumTextarea } from '../components/wizard/PremiumTextarea';
@@ -11,8 +10,12 @@ import { PremiumCheckboxGroup } from '../components/wizard/PremiumCheckboxGroup'
 import { PremiumSignatureBlock } from '../components/wizard/PremiumSignatureBlock';
 import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Select';
+import { Loader } from '../components/ui/Loader';
 import { canViewField, canEditField } from '../utils/roleUtils';
 import formDefinitionData from '../data/formDefinition.json';
+
+// Lazy load PDF preview component to split PDF library into separate chunk
+const PremiumPdfPreviewCard = lazy(() => import('../components/wizard/PremiumPdfPreviewCard').then(m => ({ default: m.PremiumPdfPreviewCard })));
 
 interface WizardStep {
   number: number;
@@ -393,7 +396,9 @@ export const FormWizardPage: React.FC = () => {
           {/* Right: PDF Preview - Hidden on mobile, shown on tablet+ */}
           <div className="lg:col-span-3 hidden md:block">
             <div className="lg:sticky lg:top-4">
-              <PremiumPdfPreviewCard role={role} />
+              <Suspense fallback={<Loader variant="dots" size="md" message="Loading PDF preview..." />}>
+                <PremiumPdfPreviewCard role={role} />
+              </Suspense>
             </div>
           </div>
         </div>

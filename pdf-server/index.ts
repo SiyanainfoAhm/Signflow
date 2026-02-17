@@ -198,17 +198,35 @@ function buildHtml(data: {
   assessmentSummaryData?: Record<string, string | null>;
 }): { html: string; unitCode: string; version: string; headerHtml: string } {
   const { form, steps, answers, taskRowsMap = new Map(), trainerAssessments = new Map(), resultsOffice = new Map(), resultsData = new Map(), assessmentSummaryData = {} } = data;
-  let headerImg = form.header_asset_url || '';
-  if (!headerImg) {
-    try {
-      let logoPath = path.join(__dirname, '..', 'public', 'logo.jpeg');
-      if (!fs.existsSync(logoPath)) logoPath = path.join(__dirname, '..', 'public', 'logo.jpg');
-      if (fs.existsSync(logoPath)) {
-        const logoBuf = fs.readFileSync(logoPath);
-        headerImg = `data:image/jpeg;base64,${logoBuf.toString('base64')}`;
+  // Header images: crest (shield logo) and text logo
+  let crestImg = form.header_asset_url || '';
+  let textImg = '';
+  try {
+    if (!crestImg) {
+      const crestPath = path.join(__dirname, '..', 'public', 'logo-crest.png');
+      if (fs.existsSync(crestPath)) {
+        const buf = fs.readFileSync(crestPath);
+        crestImg = `data:image/png;base64,${buf.toString('base64')}`;
+      } else {
+        let logoPath = path.join(__dirname, '..', 'public', 'logo.jpeg');
+        let mime = 'jpeg';
+        if (!fs.existsSync(logoPath)) logoPath = path.join(__dirname, '..', 'public', 'logo.jpg');
+        if (!fs.existsSync(logoPath)) {
+          logoPath = path.join(__dirname, '..', 'public', 'logo.png');
+          mime = 'png';
+        }
+        if (fs.existsSync(logoPath)) {
+          const logoBuf = fs.readFileSync(logoPath);
+          crestImg = `data:image/${mime};base64,${logoBuf.toString('base64')}`;
+        }
       }
-    } catch (_e) {}
-  }
+    }
+    const textPath = path.join(__dirname, '..', 'public', 'logo-text.png');
+    if (fs.existsSync(textPath)) {
+      const buf = fs.readFileSync(textPath);
+      textImg = `data:image/png;base64,${buf.toString('base64')}`;
+    }
+  } catch (_e) {}
 
   let html = `
 <!DOCTYPE html>
@@ -216,7 +234,7 @@ function buildHtml(data: {
 <head>
   <meta charset="UTF-8">
   <style>
-    @page { size: A4; margin: 115px 15mm 70px 15mm; }
+    @page { size: A4; margin: 165px 15mm 70px 15mm; }
     @page :first { margin: 0; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; margin: 0; padding: 0; color: #1f2937; box-sizing: border-box; min-height: 100%; }
     .header { position: fixed; top: 0; left: 15mm; right: 15mm; width: calc(100% - 30mm); z-index: 1000; background: #fff; padding: 16px 0 16px 0; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; border-bottom: 1px solid #9ca3af; box-sizing: border-box; overflow: visible; }
@@ -547,9 +565,12 @@ function buildHtml(data: {
   const unitText = [unitCode || 'Unit Code', unitTitle || form.name || 'Unit Title'].filter(Boolean).join(' ');
 
   const headerHtml = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;padding:12px 15mm;font-family:Arial,sans-serif;font-size:8pt;color:#374151;box-sizing:border-box;">
-      <div style="flex-shrink:0;">${headerImg ? `<img src="${headerImg}" alt="Skyline" style="max-height:85px;max-width:200px;" />` : ''}</div>
-      <div style="text-align:right;line-height:1.35;flex-shrink:0;padding-left:12px;">
+    <div style="position:relative;width:100%;min-height:165px;box-sizing:border-box;font-family:'Calibri','Calibri Light',Arial,sans-serif;font-weight:400;line-height:1.05;">
+      <div style="height:165px;min-height:165px;width:0;overflow:hidden;pointer-events:none;"></div>
+      <div style="position:absolute;left:15mm;right:15mm;top:110px;border-top:1px solid #8b95a5;z-index:0;"></div>
+      <div style="position:absolute;left:15mm;top:0px;z-index:1;">${crestImg ? `<img src="${crestImg}" alt="Skyline Institute of Technology" style="width:210px;height:165px;object-fit:contain;display:block;" />` : ''}</div>
+      <div style="position:absolute;left:50%;top:18px;transform:translateX(-50%);z-index:1;">${textImg ? `<img src="${textImg}" alt="SKYLINE INSTITUTE OF TECHNOLOGY" style="height:100px;width:auto;object-fit:contain;display:block;" />` : '<div style="display:flex;flex-direction:column;align-items:center;"><span style="font-size:22pt;font-weight:700;color:#f97316;letter-spacing:2px;">SKYLINE</span><span style="font-size:9pt;font-weight:600;color:#374151;letter-spacing:2px;margin-top:2px;">INSTITUTE OF TECHNOLOGY</span></div>'}</div>
+      <div style="position:absolute;right:15mm;top:8px;width:260px;font-size:11pt;color:#374151;text-align:right;line-height:1.25;font-weight:300;z-index:1;">
         Level 8, 310 King Street<br/>Melbourne VIC – 3000<br/>RTO: 45989 CRICOS: 04114B<br/>Email: <a href="mailto:info@slit.edu.au" style="color:#2563eb;text-decoration:underline;">info@slit.edu.au</a><br/>Phone: +61 3 9125 1661
       </div>
     </div>
@@ -559,7 +580,7 @@ function buildHtml(data: {
   <div class="cover-image" style="${coverImageStyle}"></div>
 
   <div class="cover-logo">
-    ${headerImg ? `<img src="${headerImg}" alt="Skyline" />` : ''}
+    ${crestImg ? `<img src="${crestImg}" alt="Skyline" />` : ''}
   </div>
 
   <div class="cover-band"><h1>STUDENT WORKBOOK</h1></div>
@@ -1284,7 +1305,7 @@ app.get('/pdf/:instanceId', async (req, res) => {
     const restPdf = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '115px', right: '15mm', bottom: '70px', left: '15mm' },
+      margin: { top: '165px', right: '15mm', bottom: '70px', left: '15mm' },
       displayHeaderFooter: true,
       headerTemplate: headerHtml,
       footerTemplate: footerHtml,

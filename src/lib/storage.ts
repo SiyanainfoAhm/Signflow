@@ -50,7 +50,7 @@ export async function uploadRowImage(
   file: File
 ): Promise<UploadResult> {
   const ext = file.name.split('.').pop() || 'jpg';
-  const path = `${FOLDER}/${formId}/rows/${rowId}_${Date.now()}.${ext}`;
+  const path = `${FOLDER}/${formId}/questions/${questionId}/rows/${rowId}_${Date.now()}.${ext}`;
 
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     upsert: false,
