@@ -558,7 +558,12 @@ interface AssessmentTaskInput {
   task2_method: string;
 }
 
-async function createCompulsoryFormStructure(formId: number, assessmentTasks?: AssessmentTaskInput): Promise<void> {
+interface AssessmentTask {
+  label: string;
+  method: string;
+}
+
+async function createCompulsoryFormStructure(formId: number, assessmentTasks?: AssessmentTaskInput | AssessmentTask[]): Promise<void> {
   // Single compulsory step: Student & Trainer, Qualification, Assessment Tasks, Assessment Submission
   // Subtitle "Student, trainer, qualification & assessment" is used only for this step; other steps keep their own titles/subtitles
   const { data: step } = await supabase
@@ -614,11 +619,30 @@ async function createCompulsoryFormStructure(formId: number, assessmentTasks?: A
       .single();
     if (q) {
       const qid = (q as { id: number }).id;
-      const t1 = assessmentTasks ?? { task1_label: 'Assessment task 1', task1_method: 'Written Assessment (WA)', task2_label: 'Assessment task 2', task2_method: 'Practical Task 2.1\nPractical Task 2.2\nPractical Task 2.3' };
-      const rowsToInsert = [
-        { question_id: qid, row_label: t1.task1_label, row_help: t1.task1_method, sort_order: 0 },
-        { question_id: qid, row_label: t1.task2_label, row_help: t1.task2_method, sort_order: 1 },
-      ];
+      let rowsToInsert: Array<{ question_id: number; row_label: string; row_help: string; sort_order: number }> = [];
+      
+      if (Array.isArray(assessmentTasks)) {
+        // New format: array of tasks
+        rowsToInsert = assessmentTasks.map((task, index) => ({
+          question_id: qid,
+          row_label: task.label,
+          row_help: task.method,
+          sort_order: index,
+        }));
+      } else if (assessmentTasks) {
+        // Legacy format: object with task1/task2
+        rowsToInsert = [
+          { question_id: qid, row_label: assessmentTasks.task1_label, row_help: assessmentTasks.task1_method, sort_order: 0 },
+          { question_id: qid, row_label: assessmentTasks.task2_label, row_help: assessmentTasks.task2_method, sort_order: 1 },
+        ];
+      } else {
+        // Default fallback
+        rowsToInsert = [
+          { question_id: qid, row_label: 'Assessment task 1', row_help: 'Written Assessment (WA)', sort_order: 0 },
+          { question_id: qid, row_label: 'Assessment task 2', row_help: 'Practical Task 2.1\nPractical Task 2.2\nPractical Task 2.3', sort_order: 1 },
+        ];
+      }
+      
       for (const row of rowsToInsert) {
         const { data: inserted } = await supabase.from('skyline_form_question_rows').insert(row).select('id').single();
         if (inserted) taskRowIds.push((inserted as { id: number }).id);
@@ -692,14 +716,16 @@ export interface CreateFormInput {
   qualification_name: string;
   unit_code: string;
   unit_name: string;
-  assessment_task_1_label: string;
-  assessment_task_1_method: string;
-  assessment_task_2_label: string;
-  assessment_task_2_method: string;
+  assessment_tasks: AssessmentTask[];
+  // Legacy fields for backward compatibility
+  assessment_task_1_label?: string;
+  assessment_task_1_method?: string;
+  assessment_task_2_label?: string;
+  assessment_task_2_method?: string;
 }
 
 export async function createForm(input: CreateFormInput): Promise<Form | null> {
-  const { name, qualification_code, qualification_name, unit_code, unit_name, assessment_task_1_label, assessment_task_1_method, assessment_task_2_label, assessment_task_2_method } = input;
+  const { name, qualification_code, qualification_name, unit_code, unit_name, assessment_tasks, assessment_task_1_label, assessment_task_1_method, assessment_task_2_label, assessment_task_2_method } = input;
   const { data, error } = await supabase
     .from('skyline_forms')
     .insert({ name, qualification_code, qualification_name, unit_code, unit_name })
@@ -710,12 +736,22 @@ export async function createForm(input: CreateFormInput): Promise<Form | null> {
     return null;
   }
   const form = data as Form;
-  await createCompulsoryFormStructure(form.id, {
-    task1_label: assessment_task_1_label,
-    task1_method: assessment_task_1_method,
-    task2_label: assessment_task_2_label,
-    task2_method: assessment_task_2_method,
-  });
+  
+  // Use new array format if provided, otherwise fall back to legacy format
+  if (assessment_tasks && assessment_tasks.length > 0) {
+    await createCompulsoryFormStructure(form.id, assessment_tasks);
+  } else if (assessment_task_1_label && assessment_task_1_method && assessment_task_2_label && assessment_task_2_method) {
+    // Legacy format
+    await createCompulsoryFormStructure(form.id, {
+      task1_label: assessment_task_1_label,
+      task1_method: assessment_task_1_method,
+      task2_label: assessment_task_2_label,
+      task2_method: assessment_task_2_method,
+    });
+  } else {
+    // Default fallback
+    await createCompulsoryFormStructure(form.id);
+  }
   return form;
 }
 

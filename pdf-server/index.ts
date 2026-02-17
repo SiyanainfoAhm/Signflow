@@ -906,7 +906,7 @@ function buildHtml(data: {
             }
           }
         }
-        const sum = assessmentSummaryData;
+        const sum = assessmentSummaryData || {};
         const studentName = String(codeToValue.get('student.fullName') ?? '');
         const studentId = String(codeToValue.get('student.id') ?? '');
         const unitCodeName = [String(codeToValue.get('unit.code') ?? ''), String(codeToValue.get('unit.name') ?? '')].filter(Boolean).join(' ');
@@ -922,6 +922,13 @@ function buildHtml(data: {
         html += '</tbody></table>';
         html += '<table class="assessment-summary-table"><thead><tr><th class="summary-label">Please attach the following evidence to this form</th><th colspan="3" class="summary-result-header">Result</th></tr>';
         html += '<tr><th class="summary-label"></th><th class="summary-result-header summary-attempt-col">1st Attempt</th><th class="summary-result-header summary-attempt-col">2nd Attempt</th><th class="summary-result-header summary-attempt-col">3rd Attempt</th></tr></thead><tbody>';
+        if (taskRowsOrdered.length === 0) {
+          // Show default placeholder rows if no tasks exist yet
+          html += '<tr><td class="summary-label">Assessment Task 1</td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td></tr>';
+        }
         for (const tr of taskRowsOrdered) {
           const secId = taskRowToSectionId.get(tr.id);
           const rd = secId ? resultsData.get(secId) : null;
@@ -1245,6 +1252,11 @@ app.get('/pdf/:instanceId', async (req, res) => {
           student_date_3: (r.student_date_3 as string) ?? null,
           student_overall_feedback: (r.student_overall_feedback as string) ?? null,
           admin_initials: (r.admin_initials as string) ?? null,
+          reasonable_adjustment_task: (r.reasonable_adjustment_task as string) ?? null,
+          reasonable_adjustment_explanation: (r.reasonable_adjustment_explanation as string) ?? null,
+          trainer_assessor_name: (r.trainer_assessor_name as string) ?? null,
+          trainer_assessor_signature: (r.trainer_assessor_signature as string) ?? null,
+          trainer_assessor_date: (r.trainer_assessor_date as string) ?? null,
         };
       }
     } catch (_e) {

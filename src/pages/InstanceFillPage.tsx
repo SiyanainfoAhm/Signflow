@@ -847,24 +847,39 @@ export const InstanceFillPage: React.FC = () => {
                                     <tr><th className="border border-gray-300 bg-gray-200 p-2"></th><th className="border border-gray-300 bg-[#5E5E5E] text-white font-bold p-2 text-center">1st Attempt</th><th className="border border-gray-300 bg-[#5E5E5E] text-white font-bold p-2 text-center">2nd Attempt</th><th className="border border-gray-300 bg-[#5E5E5E] text-white font-bold p-2 text-center">3rd Attempt</th></tr>
                                   </thead>
                                   <tbody>
-                                    {taskRowsOrdered.map((tr) => {
-                                      const secId = taskRowToSectionId.get(tr.id);
-                                      const rd = secId ? resultsData[secId] : null;
-                                      return (
-                                        <tr key={tr.id}>
-                                          <td className="border border-gray-300 bg-gray-100 font-semibold p-2">{tr.row_label}</td>
-                                          <td className="border border-gray-300 p-2 text-center">
-                                            <div className="flex flex-col gap-1 items-center"><span className="text-xs">{rd?.first_attempt_satisfactory === 's' ? '✓ Satisfactory' : rd?.first_attempt_satisfactory === 'ns' ? '✓ Not Satisfactory' : '—'}</span><span className="text-xs">Date: {rd?.first_attempt_date ?? '—'}</span></div>
-                                          </td>
-                                          <td className="border border-gray-300 p-2 text-center">
-                                            <div className="flex flex-col gap-1 items-center"><span className="text-xs">{rd?.second_attempt_satisfactory === 's' ? '✓ Satisfactory' : rd?.second_attempt_satisfactory === 'ns' ? '✓ Not Satisfactory' : '—'}</span><span className="text-xs">Date: {rd?.second_attempt_date ?? '—'}</span></div>
-                                          </td>
-                                          <td className="border border-gray-300 p-2 text-center">
-                                            <div className="flex flex-col gap-1 items-center"><span className="text-xs">—</span><span className="text-xs">Date: —</span></div>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
+                                    {taskRowsOrdered.length === 0 ? (
+                                      <tr>
+                                        <td className="border border-gray-300 bg-gray-100 font-semibold p-2">Assessment Task 1</td>
+                                        <td className="border border-gray-300 p-2 text-center">
+                                          <div className="flex flex-col gap-1 items-center"><span className="text-xs">—</span><span className="text-xs">Date: —</span></div>
+                                        </td>
+                                        <td className="border border-gray-300 p-2 text-center">
+                                          <div className="flex flex-col gap-1 items-center"><span className="text-xs">—</span><span className="text-xs">Date: —</span></div>
+                                        </td>
+                                        <td className="border border-gray-300 p-2 text-center">
+                                          <div className="flex flex-col gap-1 items-center"><span className="text-xs">—</span><span className="text-xs">Date: —</span></div>
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      taskRowsOrdered.map((tr) => {
+                                        const secId = taskRowToSectionId.get(tr.id);
+                                        const rd = secId ? resultsData[secId] : null;
+                                        return (
+                                          <tr key={tr.id}>
+                                            <td className="border border-gray-300 bg-gray-100 font-semibold p-2">{tr.row_label}</td>
+                                            <td className="border border-gray-300 p-2 text-center">
+                                              <div className="flex flex-col gap-1 items-center"><span className="text-xs">{rd?.first_attempt_satisfactory === 's' ? '✓ Satisfactory' : rd?.first_attempt_satisfactory === 'ns' ? '✓ Not Satisfactory' : '—'}</span><span className="text-xs">Date: {rd?.first_attempt_date ?? '—'}</span></div>
+                                            </td>
+                                            <td className="border border-gray-300 p-2 text-center">
+                                              <div className="flex flex-col gap-1 items-center"><span className="text-xs">{rd?.second_attempt_satisfactory === 's' ? '✓ Satisfactory' : rd?.second_attempt_satisfactory === 'ns' ? '✓ Not Satisfactory' : '—'}</span><span className="text-xs">Date: {rd?.second_attempt_date ?? '—'}</span></div>
+                                            </td>
+                                            <td className="border border-gray-300 p-2 text-center">
+                                              <div className="flex flex-col gap-1 items-center"><span className="text-xs">—</span><span className="text-xs">Date: —</span></div>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })
+                                    )}
                                     <tr className="border-t-2 border-gray-400">
                                       <td className="border border-gray-300 bg-gray-100 font-semibold p-2">Final Assessment result for this unit</td>
                                       <td className="border border-gray-300 p-2">

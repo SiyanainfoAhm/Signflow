@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, FileText, Edit, Eye } from 'lucide-react';
+import { Plus, FileText, Edit, Eye, Trash2 } from 'lucide-react';
 import { listForms, createForm, createFormInstance } from '../lib/formEngine';
 import type { Form } from '../types/database';
 import { Card } from '../components/ui/Card';
@@ -8,6 +8,12 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
 import { Loader } from '../components/ui/Loader';
+
+interface AssessmentTask {
+  id: string;
+  label: string;
+  method: string;
+}
 
 export const AdminFormsListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -18,10 +24,9 @@ export const AdminFormsListPage: React.FC = () => {
   const [qualificationName, setQualificationName] = useState('');
   const [unitCode, setUnitCode] = useState('');
   const [unitName, setUnitName] = useState('');
-  const [task1Label, setTask1Label] = useState('');
-  const [task1Method, setTask1Method] = useState('');
-  const [task2Label, setTask2Label] = useState('');
-  const [task2Method, setTask2Method] = useState('');
+  const [assessmentTasks, setAssessmentTasks] = useState<AssessmentTask[]>([
+    { id: '1', label: '', method: '' }
+  ]);
   const [creating, setCreating] = useState(false);
   const [previewing, setPreviewing] = useState<number | null>(null);
 
@@ -38,10 +43,8 @@ export const AdminFormsListPage: React.FC = () => {
     qualificationName.trim() &&
     unitCode.trim() &&
     unitName.trim() &&
-    task1Label.trim() &&
-    task1Method.trim() &&
-    task2Label.trim() &&
-    task2Method.trim();
+    assessmentTasks.length > 0 &&
+    assessmentTasks.every(task => task.label.trim() && task.method.trim());
 
   const handleCreate = async () => {
     if (!canCreate) return;
@@ -52,10 +55,10 @@ export const AdminFormsListPage: React.FC = () => {
       qualification_name: qualificationName.trim(),
       unit_code: unitCode.trim(),
       unit_name: unitName.trim(),
-      assessment_task_1_label: task1Label.trim(),
-      assessment_task_1_method: task1Method.trim(),
-      assessment_task_2_label: task2Label.trim(),
-      assessment_task_2_method: task2Method.trim(),
+      assessment_tasks: assessmentTasks.map(task => ({
+        label: task.label.trim(),
+        method: task.method.trim()
+      })),
     });
     if (created) {
       setForms((prev) => [created, ...prev]);
@@ -64,12 +67,26 @@ export const AdminFormsListPage: React.FC = () => {
       setQualificationName('');
       setUnitCode('');
       setUnitName('');
-      setTask1Label('');
-      setTask1Method('');
-      setTask2Label('');
-      setTask2Method('');
+      setAssessmentTasks([{ id: '1', label: '', method: '' }]);
     }
     setCreating(false);
+  };
+
+  const addAssessmentTask = () => {
+    const newId = String(Date.now());
+    setAssessmentTasks([...assessmentTasks, { id: newId, label: '', method: '' }]);
+  };
+
+  const removeAssessmentTask = (id: string) => {
+    if (assessmentTasks.length > 1) {
+      setAssessmentTasks(assessmentTasks.filter(task => task.id !== id));
+    }
+  };
+
+  const updateAssessmentTask = (id: string, field: 'label' | 'method', value: string) => {
+    setAssessmentTasks(assessmentTasks.map(task =>
+      task.id === id ? { ...task, [field]: value } : task
+    ));
   };
 
   const handlePreview = async (formId: number) => {
@@ -143,40 +160,54 @@ export const AdminFormsListPage: React.FC = () => {
               />
             </div>
             <div className="border-t border-gray-200 pt-4 mt-2">
-              <div className="text-sm font-semibold text-gray-700 mb-2">Assessment Tasks (required)</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-semibold text-gray-700">Assessment Tasks (required)</div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addAssessmentTask}
+                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span>Add assignment</span>
+                </Button>
+              </div>
               <div className="space-y-3">
-                <div>
-                  <Input
-                    value={task1Label}
-                    onChange={(e) => setTask1Label(e.target.value)}
-                    placeholder="Assessment task 1 - Evidence number (e.g. Assessment task 1) *"
-                    required
-                  />
-                  <Textarea
-                    value={task1Method}
-                    onChange={(e) => setTask1Method(e.target.value)}
-                    placeholder="Assessment task 1 - Method/Type of evidence (e.g. Written Assessment (WA)) *"
-                    rows={2}
-                    className="mt-1"
-                    required
-                  />
-                </div>
-                <div>
-                  <Input
-                    value={task2Label}
-                    onChange={(e) => setTask2Label(e.target.value)}
-                    placeholder="Assessment task 2 - Evidence number (e.g. Assessment task 2) *"
-                    required
-                  />
-                  <Textarea
-                    value={task2Method}
-                    onChange={(e) => setTask2Method(e.target.value)}
-                    placeholder="Assessment task 2 - Method/Type of evidence (use new lines for multiple items) *"
-                    rows={3}
-                    className="mt-1"
-                    required
-                  />
-                </div>
+                {assessmentTasks.map((task, index) => (
+                  <div key={task.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-xs font-medium text-gray-600">
+                        Assessment task {index + 1}
+                      </span>
+                      {assessmentTasks.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeAssessmentTask(task.id)}
+                          className="text-red-600 hover:text-red-700 hover:border-red-300"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <Input
+                      value={task.label}
+                      onChange={(e) => updateAssessmentTask(task.id, 'label', e.target.value)}
+                      placeholder={`Assessment task ${index + 1} - Evidence number (e.g. Assessment task ${index + 1}) *`}
+                      required
+                    />
+                    <Textarea
+                      value={task.method}
+                      onChange={(e) => updateAssessmentTask(task.id, 'method', e.target.value)}
+                      placeholder={`Assessment task ${index + 1} - Method/Type of evidence (e.g. Written Assessment (WA)) *`}
+                      rows={2}
+                      className="mt-1"
+                      required
+                    />
+                  </div>
+                ))}
               </div>
             </div>
             <Button onClick={handleCreate} disabled={creating || !canCreate}>
