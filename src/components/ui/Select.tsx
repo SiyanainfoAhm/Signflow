@@ -64,29 +64,29 @@ export const Select: React.FC<SelectProps> = ({
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
           className={cn(
-            'w-full h-12 px-4 rounded-lg border transition-all duration-200',
+            'w-full min-w-0 h-12 px-4 rounded-lg border transition-all duration-200',
             'focus:outline-none focus:ring-2 focus:ring-[var(--brand)] focus:ring-offset-1 focus:border-[var(--brand)]',
             error
               ? 'border-red-400 focus:ring-red-400 focus:border-red-400 bg-red-50'
               : 'border-[var(--border)] hover:border-gray-300',
             'disabled:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-500',
-            'text-sm text-left flex items-center justify-between bg-white',
+            'text-sm text-left flex items-center justify-between gap-2 bg-white',
             isOpen && 'border-[var(--brand)] ring-2 ring-[var(--brand)] ring-offset-1'
           )}
         >
-          <span className={selectedOption ? 'text-gray-900' : 'text-gray-400'}>
+          <span className={cn('min-w-0 truncate', selectedOption ? 'text-gray-900' : 'text-gray-400')} title={selectedOption?.label || undefined}>
             {selectedOption?.label || 'Select an option...'}
           </span>
           <ChevronDown
             className={cn(
-              'w-5 h-5 text-gray-400 transition-transform duration-200',
+              'w-5 h-5 shrink-0 text-gray-400 transition-transform duration-200',
               isOpen && 'transform rotate-180'
             )}
           />
         </button>
 
         {isOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+          <div className="absolute z-[100] left-1/2 -translate-x-1/2 mt-1 min-w-full bg-white border-2 border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
             {options.map((option) => (
               <button
                 key={option.value}
@@ -96,10 +96,11 @@ export const Select: React.FC<SelectProps> = ({
                   setIsOpen(false);
                 }}
                 className={cn(
-                  'w-full px-4 py-2.5 text-left text-sm transition-colors',
+                  'w-full px-4 py-2.5 text-left text-sm transition-colors whitespace-nowrap overflow-hidden text-ellipsis',
                   'hover:bg-[var(--brand)] hover:text-white',
                   value === option.value && 'bg-orange-50 text-[var(--brand)] font-semibold'
                 )}
+                title={option.label}
               >
                 {option.label}
               </button>

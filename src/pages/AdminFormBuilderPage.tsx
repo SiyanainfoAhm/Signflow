@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Eye, GripVertical, Trash2, ImagePlus } from 'lucide-react';
 import {
@@ -183,6 +183,7 @@ const PDF_RENDER_MODES = [
   { value: 'task_instructions', label: 'Task Instructions' },
   { value: 'task_questions', label: 'Task Questions' },
   { value: 'task_results', label: 'Task Results' },
+  { value: 'assessment_summary', label: 'Assessment Summary Sheet' },
 ];
 
 interface AssessmentTaskRow {
@@ -264,7 +265,7 @@ function SortableSectionItem({
           </div>
         )}
         {isSelected && (
-          <div onClick={(e) => e.stopPropagation()} className="mt-2 space-y-2">
+          <div onClick={(e) => e.stopPropagation()} className="mt-2 space-y-2 w-full min-w-0">
             <Select
               value={section.pdf_render_mode}
               onChange={onPdfModeChange}
@@ -373,28 +374,36 @@ export const AdminFormBuilderPage: React.FC = () => {
   const [assessmentTaskRows, setAssessmentTaskRows] = useState<AssessmentTaskRow[]>([]);
   const navigate = useNavigate();
   const coverInputRef = React.useRef<HTMLInputElement>(null);
+  const questionPendingUpdates = useRef<Record<number, Partial<FormQuestion>>>({});
+  const questionSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const QUESTION_SAVE_DEBOUNCE_MS = 450;
+
+  const assessmentTasksGridQuestionId = useMemo(() => {
+    for (const step of steps) {
+      const sec = step.sections.find((s) => s.pdf_render_mode === 'assessment_tasks');
+      if (!sec) continue;
+      const gridQ = sec.questions.find((q) => q.type === 'grid_table');
+      if (gridQ) return gridQ.id;
+    }
+    return null;
+  }, [steps]);
 
   useEffect(() => {
-    const fetchAssessmentTaskRows = async () => {
-      for (const step of steps) {
-        const sec = step.sections.find((s) => s.pdf_render_mode === 'assessment_tasks');
-        if (!sec) continue;
-        const gridQ = sec.questions.find((q) => q.type === 'grid_table');
-        if (!gridQ) continue;
-        const { data } = await supabase
-          .from('skyline_form_question_rows')
-          .select('id, row_label')
-          .eq('question_id', gridQ.id)
-          .order('sort_order');
-        setAssessmentTaskRows((data as AssessmentTaskRow[]) || []);
-        break;
-      }
-      if (!steps.some((s) => s.sections.some((sec) => sec.pdf_render_mode === 'assessment_tasks'))) {
-        setAssessmentTaskRows([]);
-      }
-    };
-    fetchAssessmentTaskRows();
-  }, [steps]);
+    if (assessmentTasksGridQuestionId == null) {
+      setAssessmentTaskRows([]);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('skyline_form_question_rows')
+      .select('id, row_label')
+      .eq('question_id', assessmentTasksGridQuestionId)
+      .order('sort_order')
+      .then(({ data }) => {
+        if (!cancelled) setAssessmentTaskRows((data as AssessmentTaskRow[]) || []);
+      });
+    return () => { cancelled = true; };
+  }, [assessmentTasksGridQuestionId]);
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -460,6 +469,20 @@ export const AdminFormBuilderPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    return () => {
+      Object.keys(questionSaveTimers.current).forEach((id) => {
+        clearTimeout(questionSaveTimers.current[Number(id)]);
+        const pending = questionPendingUpdates.current[Number(id)];
+        if (pending && Object.keys(pending).length > 0) {
+          supabase.from('skyline_form_questions').update(pending).eq('id', Number(id));
+        }
+      });
+      questionSaveTimers.current = {};
+      questionPendingUpdates.current = {};
+    };
+  }, []);
 
   const selectedStep = steps.find((s) => s.id === selectedStepId);
   const selectedSection = selectedStep?.sections.find((s) => s.id === selectedSectionId);
@@ -689,8 +712,18 @@ export const AdminFormBuilderPage: React.FC = () => {
     }
   };
 
-  const updateQuestion = async (questionId: number, updates: Partial<FormQuestion>) => {
-    await supabase.from('skyline_form_questions').update(updates).eq('id', questionId);
+  const flushQuestionSave = useCallback((questionId: number) => {
+    const pending = questionPendingUpdates.current[questionId];
+    delete questionPendingUpdates.current[questionId];
+    const t = questionSaveTimers.current[questionId];
+    if (t) clearTimeout(t);
+    delete questionSaveTimers.current[questionId];
+    if (pending && Object.keys(pending).length > 0) {
+      supabase.from('skyline_form_questions').update(pending).eq('id', questionId);
+    }
+  }, []);
+
+  const updateQuestion = useCallback((questionId: number, updates: Partial<FormQuestion>) => {
     setSteps((prev) =>
       prev.map((s) => ({
         ...s,
@@ -702,7 +735,16 @@ export const AdminFormBuilderPage: React.FC = () => {
         })),
       }))
     );
-  };
+    questionPendingUpdates.current[questionId] = {
+      ...questionPendingUpdates.current[questionId],
+      ...updates,
+    };
+    const existing = questionSaveTimers.current[questionId];
+    if (existing) clearTimeout(existing);
+    questionSaveTimers.current[questionId] = setTimeout(() => {
+      flushQuestionSave(questionId);
+    }, QUESTION_SAVE_DEBOUNCE_MS);
+  }, [flushQuestionSave]);
 
   if (loading || !form) {
     return <Loader fullPage variant="dots" size="lg" message="Loading form..." />;
@@ -801,7 +843,7 @@ export const AdminFormBuilderPage: React.FC = () => {
         </div>
 
         {/* Middle: Sections */}
-        <div className="w-56 border-r border-[var(--border)] bg-white p-4 overflow-y-auto">
+        <div className="w-64 min-w-[14rem] border-r border-[var(--border)] bg-white p-4 overflow-y-auto">
           <div className="flex justify-between items-center mb-3">
             <h2 className="font-semibold text-sm">Sections</h2>
             <Button
@@ -850,9 +892,11 @@ export const AdminFormBuilderPage: React.FC = () => {
                     ? 'Questions to answer'
                     : selectedSection?.pdf_render_mode === 'task_results'
                       ? 'Results'
-                      : 'Questions'}
+                      : selectedSection?.pdf_render_mode === 'assessment_summary' || selectedSection?.title === 'Assessment Summary Sheet'
+                        ? 'Assessment Summary Sheet'
+                        : 'Questions'}
               </h2>
-              {(selectedSection?.pdf_render_mode === 'task_questions' || !['task_instructions', 'task_questions', 'task_results'].includes(selectedSection?.pdf_render_mode || '')) && (
+              {(selectedSection?.pdf_render_mode === 'task_questions' || (!['task_instructions', 'task_questions', 'task_results', 'assessment_summary'].includes(selectedSection?.pdf_render_mode || '') && selectedSection?.title !== 'Assessment Summary Sheet')) && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -871,6 +915,10 @@ export const AdminFormBuilderPage: React.FC = () => {
               ) : selectedSection.pdf_render_mode === 'task_results' ? (
                 <p className="text-sm text-gray-600">
                   Results sheet for trainer/assessor to record outcomes.
+                </p>
+              ) : selectedSection.pdf_render_mode === 'assessment_summary' || selectedSection.title === 'Assessment Summary Sheet' ? (
+                <p className="text-sm text-gray-600">
+                  Assessment Summary Sheet. Appears as one page in the PDF. Student details, task results, signatures and feedback are completed when the form is filled.
                 </p>
               ) : (
                 <DndContext sensors={questionSensors} collisionDetection={closestCenter} onDragEnd={handleQuestionsDragEnd}>
@@ -1071,6 +1119,24 @@ export const AdminFormBuilderPage: React.FC = () => {
                   This section shows the results template (Satisfactory/Not Satisfactory, feedback, signatures) for the trainer/assessor to complete. No editing needed here.
                 </p>
               </Card>
+            ) : selectedSection?.pdf_render_mode === 'assessment_summary' || selectedSection?.title === 'Assessment Summary Sheet' ? (
+              <Card>
+                <h3 className="font-bold mb-2">Assessment Summary Sheet</h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  This section appears as a single page in the PDF. It includes:
+                </p>
+                <ul className="text-sm text-gray-600 list-disc list-inside space-y-1 mb-3">
+                  <li>Student name, ID, start/end date, unit code & name</li>
+                  <li>Evidence table with 1st / 2nd / 3rd attempt (Satisfactory / Not Satisfactory, dates)</li>
+                  <li>Final assessment result (Competent / Not Yet Competent)</li>
+                  <li>Trainer/assessor and student signatures and dates</li>
+                  <li>Student overall feedback</li>
+                  <li>Administrative use – initials</li>
+                </ul>
+                <p className="text-sm text-gray-600">
+                  All content is completed when the form is filled (e.g. on the form fill page). No editing needed here in the builder.
+                </p>
+              </Card>
             ) : selectedSection && !editingQuestionId ? (
               <p className="text-sm text-gray-500">Select a question to edit, or click + Add to create one</p>
             ) : !selectedSection ? (
@@ -1098,8 +1164,13 @@ export const AdminFormBuilderPage: React.FC = () => {
   );
 };
 
+const OPTION_SAVE_DEBOUNCE_MS = 450;
+
 function QuestionOptionsEditor({ questionId }: { questionId: number }) {
   const [options, setOptions] = useState<{ id: number; value: string; label: string; sort_order: number }[]>([]);
+  const optionPendingUpdates = useRef<Record<number, { value?: string; label?: string }>>({});
+  const optionSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
   useEffect(() => {
     supabase
       .from('skyline_form_question_options')
@@ -1108,6 +1179,20 @@ function QuestionOptionsEditor({ questionId }: { questionId: number }) {
       .order('sort_order')
       .then(({ data }) => setOptions(data || []));
   }, [questionId]);
+
+  useEffect(() => {
+    return () => {
+      Object.keys(optionSaveTimers.current).forEach((id) => {
+        clearTimeout(optionSaveTimers.current[Number(id)]);
+        const pending = optionPendingUpdates.current[Number(id)];
+        if (pending && Object.keys(pending).length > 0) {
+          supabase.from('skyline_form_question_options').update(pending).eq('id', Number(id));
+        }
+      });
+      optionSaveTimers.current = {};
+      optionPendingUpdates.current = {};
+    };
+  }, []);
 
   const addOption = async () => {
     const { data } = await supabase
@@ -1118,10 +1203,24 @@ function QuestionOptionsEditor({ questionId }: { questionId: number }) {
     if (data) setOptions((prev) => [...prev, data]);
   };
 
-  const updateOption = async (id: number, updates: { value?: string; label?: string }) => {
-    await supabase.from('skyline_form_question_options').update(updates).eq('id', id);
+  const flushOptionSave = useCallback((id: number) => {
+    const pending = optionPendingUpdates.current[id];
+    delete optionPendingUpdates.current[id];
+    const t = optionSaveTimers.current[id];
+    if (t) clearTimeout(t);
+    delete optionSaveTimers.current[id];
+    if (pending && Object.keys(pending).length > 0) {
+      supabase.from('skyline_form_question_options').update(pending).eq('id', id);
+    }
+  }, []);
+
+  const updateOption = useCallback((id: number, updates: { value?: string; label?: string }) => {
     setOptions((prev) => prev.map((o) => (o.id === id ? { ...o, ...updates } : o)));
-  };
+    optionPendingUpdates.current[id] = { ...optionPendingUpdates.current[id], ...updates };
+    const existing = optionSaveTimers.current[id];
+    if (existing) clearTimeout(existing);
+    optionSaveTimers.current[id] = setTimeout(() => flushOptionSave(id), OPTION_SAVE_DEBOUNCE_MS);
+  }, [flushOptionSave]);
 
   return (
     <div>
@@ -1160,10 +1259,14 @@ interface QuestionRow {
   sort_order: number;
 }
 
+const ROW_SAVE_DEBOUNCE_MS = 450;
+
 function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onStepsCreated, gridTableLayout }: { questionId: number; sectionPdfMode?: string; formId?: number | null; steps?: { sort_order: number }[]; onStepsCreated?: () => void; gridTableLayout?: string }) {
   const [rows, setRows] = useState<QuestionRow[]>([]);
   const [instructionsModalRow, setInstructionsModalRow] = useState<QuestionRow | null>(null);
   const [uploadingRowId, setUploadingRowId] = useState<number | null>(null);
+  const rowPendingUpdates = useRef<Record<number, Partial<QuestionRow>>>({});
+  const rowSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     supabase
@@ -1173,6 +1276,20 @@ function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onSteps
       .order('sort_order')
       .then(({ data }) => setRows(data || []));
   }, [questionId]);
+
+  useEffect(() => {
+    return () => {
+      Object.keys(rowSaveTimers.current).forEach((id) => {
+        clearTimeout(rowSaveTimers.current[Number(id)]);
+        const pending = rowPendingUpdates.current[Number(id)];
+        if (pending && Object.keys(pending).length > 0) {
+          supabase.from('skyline_form_question_rows').update(pending).eq('id', Number(id));
+        }
+      });
+      rowSaveTimers.current = {};
+      rowPendingUpdates.current = {};
+    };
+  }, []);
 
   const addRow = async () => {
     const defaultLabel = isAssessmentTasks ? 'New task' : 'New row';
@@ -1204,14 +1321,32 @@ function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onSteps
     }
   };
 
-  const updateRow = async (id: number, updates: Partial<QuestionRow>) => {
-    await supabase.from('skyline_form_question_rows').update(updates).eq('id', id);
+  const flushRowSave = useCallback((id: number) => {
+    const pending = rowPendingUpdates.current[id];
+    delete rowPendingUpdates.current[id];
+    const t = rowSaveTimers.current[id];
+    if (t) clearTimeout(t);
+    delete rowSaveTimers.current[id];
+    if (pending && Object.keys(pending).length > 0) {
+      supabase.from('skyline_form_question_rows').update(pending).eq('id', id);
+    }
+  }, []);
+
+  const updateRow = useCallback((id: number, updates: Partial<QuestionRow>) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
-  };
+    rowPendingUpdates.current[id] = { ...rowPendingUpdates.current[id], ...updates };
+    const existing = rowSaveTimers.current[id];
+    if (existing) clearTimeout(existing);
+    rowSaveTimers.current[id] = setTimeout(() => flushRowSave(id), ROW_SAVE_DEBOUNCE_MS);
+  }, [flushRowSave]);
 
   const saveInstructions = async (rowId: number, data: TaskInstructionsData) => {
     const row_meta = { instructions: data };
-    await updateRow(rowId, { row_meta });
+    if (rowSaveTimers.current[rowId]) clearTimeout(rowSaveTimers.current[rowId]);
+    delete rowSaveTimers.current[rowId];
+    delete rowPendingUpdates.current[rowId];
+    await supabase.from('skyline_form_question_rows').update({ row_meta }).eq('id', rowId);
+    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, row_meta } : r)));
   };
 
   const isAssessmentTasks = sectionPdfMode === 'assessment_tasks';

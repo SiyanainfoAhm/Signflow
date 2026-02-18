@@ -708,6 +708,142 @@ async function createCompulsoryFormStructure(formId: number, assessmentTasks?: A
       .from('skyline_form_sections')
       .insert({ step_id: (summaryStep as { id: number }).id, title: 'Assessment Summary Sheet', pdf_render_mode: 'assessment_summary', sort_order: 0 });
   }
+
+  // Appendix A - Reasonable Adjustments (after Assessment Summary, required on every form)
+  const { data: reasonableStep } = await supabase
+    .from('skyline_form_steps')
+    .insert({ form_id: formId, title: 'Appendix A - Reasonable Adjustments', subtitle: 'Reasonable adjustment strategies and declaration', sort_order: taskStepOrder++ })
+    .select('id')
+    .single();
+  if (reasonableStep) {
+    const raStepId = (reasonableStep as { id: number }).id;
+    const { data: raSection } = await supabase
+      .from('skyline_form_sections')
+      .insert({ step_id: raStepId, title: 'Reasonable Adjustment', description: 'Students with carer responsibilities, cultural or religious obligations, English as an additional language, disability etc., can request reasonable adjustments. Academic standards will not be lowered; flexibility in delivery or assessment is required.', pdf_render_mode: 'reasonable_adjustment', sort_order: 0 })
+      .select('id')
+      .single();
+    if (raSection) {
+      const raSecId = (raSection as { id: number }).id;
+      await supabase.from('skyline_form_questions').insert([
+        { section_id: raSecId, type: 'yes_no', code: 'reasonable_adjustment.applied', label: 'Was reasonable adjustment applied to any of these assessment tasks?', sort_order: 0, role_visibility: READ_ONLY_VISIBLE, role_editability: TRAINER_ONLY_EDIT },
+        { section_id: raSecId, type: 'short_text', code: 'reasonable_adjustment.task', label: 'Write (task name and number) where reasonable adjustments have been applied', sort_order: 1, role_visibility: READ_ONLY_VISIBLE, role_editability: TRAINER_ONLY_EDIT },
+        { section_id: raSecId, type: 'long_text', code: 'reasonable_adjustment.description', label: 'Provide a description of the adjustment applied and explain reasons.', sort_order: 2, role_visibility: READ_ONLY_VISIBLE, role_editability: TRAINER_ONLY_EDIT },
+        { section_id: raSecId, type: 'signature', code: 'trainer.reasonableAdjustmentSignature', label: 'Trainer/Assessor Signature', sort_order: 3, role_visibility: READ_ONLY_VISIBLE, role_editability: TRAINER_ONLY_EDIT, pdf_meta: { showNameField: true, showDateField: true } },
+      ]);
+    }
+  }
+
+  // Learner Evaluation (after Appendix A, required on every form)
+  const { data: learnerEvalStep } = await supabase
+    .from('skyline_form_steps')
+    .insert({ form_id: formId, title: 'Learner Evaluation', subtitle: 'Training evaluation and feedback', sort_order: taskStepOrder++ })
+    .select('id')
+    .single();
+  if (learnerEvalStep) {
+    const leStepId = (learnerEvalStep as { id: number }).id;
+    
+    // Participant Information Section
+    const { data: participantSec } = await supabase
+      .from('skyline_form_sections')
+      .insert({ step_id: leStepId, title: 'Participant Information', pdf_render_mode: 'normal', sort_order: 0 })
+      .select('id')
+      .single();
+    if (participantSec) {
+      const pSecId = (participantSec as { id: number }).id;
+      await supabase.from('skyline_form_questions').insert([
+        { section_id: pSecId, type: 'short_text', code: 'evaluation.unitName', label: 'Unit of Competency Name', sort_order: 0, role_visibility: READ_ONLY_VISIBLE, role_editability: READ_ONLY_EDIT },
+        { section_id: pSecId, type: 'short_text', code: 'evaluation.studentName', label: 'Student Name (Optional)', sort_order: 1, role_visibility: READ_ONLY_VISIBLE, role_editability: DEFAULT_ROLES },
+        { section_id: pSecId, type: 'short_text', code: 'evaluation.trainerName', label: 'Trainer/Assessor Name', sort_order: 2, role_visibility: READ_ONLY_VISIBLE, role_editability: READ_ONLY_EDIT },
+        { section_id: pSecId, type: 'short_text', code: 'evaluation.employer', label: 'Employer/Work site (if applicable)', sort_order: 3, role_visibility: READ_ONLY_VISIBLE, role_editability: DEFAULT_ROLES },
+        { section_id: pSecId, type: 'short_text', code: 'evaluation.trainingDates', label: 'Dates of Training', sort_order: 4, role_visibility: READ_ONLY_VISIBLE, role_editability: READ_ONLY_EDIT },
+        { section_id: pSecId, type: 'short_text', code: 'evaluation.evaluationDate', label: 'Date of Evaluation', sort_order: 5, role_visibility: READ_ONLY_VISIBLE, role_editability: DEFAULT_ROLES },
+      ]);
+    }
+
+    // Logistics and Support Evaluation Section
+    const { data: logisticsSec } = await supabase
+      .from('skyline_form_sections')
+      .insert({ step_id: leStepId, title: 'Logistics and Support Evaluation', pdf_render_mode: 'likert_table', sort_order: 1 })
+      .select('id')
+      .single();
+    if (logisticsSec) {
+      const lSecId = (logisticsSec as { id: number }).id;
+      const logisticsQ = await supabase.from('skyline_form_questions')
+        .insert({ section_id: lSecId, type: 'likert_5', code: 'evaluation.logistics', label: 'Logistics and Support Evaluation', sort_order: 0, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES })
+        .select('id')
+        .single();
+      if (logisticsQ.data) {
+        const qId = (logisticsQ.data as { id: number }).id;
+        await supabase.from('skyline_form_question_rows').insert([
+          { question_id: qId, row_label: 'The communication regarding the required attendance and time to study to pass this unit was correct', sort_order: 0 },
+          { question_id: qId, row_label: 'The staff were efficient and helpful.', sort_order: 1 },
+          { question_id: qId, row_label: 'The training equipment and material used was effective and prepared.', sort_order: 2 },
+          { question_id: qId, row_label: 'The training venue was conducive to learning (set-up for convenience of students, comfortable in terms of temperature, etc.)', sort_order: 3 },
+        ]);
+      }
+      await supabase.from('skyline_form_questions').insert({
+        section_id: lSecId, type: 'long_text', code: 'evaluation.logisticsComments', label: 'Additional Comments on Logistics and Support', sort_order: 1, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES
+      });
+    }
+
+    // Trainer/Assessor Evaluation Section
+    const { data: trainerSec } = await supabase
+      .from('skyline_form_sections')
+      .insert({ step_id: leStepId, title: 'Trainer/Assessor Evaluation', pdf_render_mode: 'likert_table', sort_order: 2 })
+      .select('id')
+      .single();
+    if (trainerSec) {
+      const tSecId = (trainerSec as { id: number }).id;
+      const trainerQ = await supabase.from('skyline_form_questions')
+        .insert({ section_id: tSecId, type: 'likert_5', code: 'evaluation.trainer', label: 'Trainer/Assessor Evaluation', sort_order: 0, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES })
+        .select('id')
+        .single();
+      if (trainerQ.data) {
+        const qId = (trainerQ.data as { id: number }).id;
+        await supabase.from('skyline_form_question_rows').insert([
+          { question_id: qId, row_label: 'The trainer/assessor was prepared and knowledgeable on the subject of the program', sort_order: 0 },
+          { question_id: qId, row_label: 'The trainer/assessor encouraged student participation and input', sort_order: 1 },
+          { question_id: qId, row_label: 'The trainer/assessor made use of a variety of methods, exercises, activities and discussions', sort_order: 2 },
+          { question_id: qId, row_label: 'The trainer/assessor used the material in a structured and effective manner', sort_order: 3 },
+          { question_id: qId, row_label: 'The trainer/assessor was approachable and respectful of the learners', sort_order: 4 },
+          { question_id: qId, row_label: 'The trainer/assessor was punctual and kept to the schedule', sort_order: 5 },
+          { question_id: qId, row_label: 'The trainer/assessor was easy to understand and used the correct language', sort_order: 6 },
+        ]);
+      }
+      await supabase.from('skyline_form_questions').insert({
+        section_id: tSecId, type: 'long_text', code: 'evaluation.trainerComments', label: 'Additional Comments on Training', sort_order: 1, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES
+      });
+    }
+
+    // Learning Evaluation Section
+    const { data: learningSec } = await supabase
+      .from('skyline_form_sections')
+      .insert({ step_id: leStepId, title: 'Learning Evaluation', pdf_render_mode: 'likert_table', sort_order: 3 })
+      .select('id')
+      .single();
+    if (learningSec) {
+      const learnSecId = (learningSec as { id: number }).id;
+      const learningQ = await supabase.from('skyline_form_questions')
+        .insert({ section_id: learnSecId, type: 'likert_5', code: 'evaluation.learning', label: 'Learning Evaluation', sort_order: 0, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES })
+        .select('id')
+        .single();
+      if (learningQ.data) {
+        const qId = (learningQ.data as { id: number }).id;
+        await supabase.from('skyline_form_question_rows').insert([
+          { question_id: qId, row_label: 'The learning outcomes of the unit are relevant and suitable.', sort_order: 0 },
+          { question_id: qId, row_label: 'The content of the unit was relevant and suitable for the target group.', sort_order: 1 },
+          { question_id: qId, row_label: 'The length of the training was suitable for the unit.', sort_order: 2 },
+          { question_id: qId, row_label: 'The learning material assisted in the learning of new knowledge and skills to apply in a practical manner.', sort_order: 3 },
+          { question_id: qId, row_label: 'The learning material was free from spelling and grammar errors', sort_order: 4 },
+          { question_id: qId, row_label: 'Handouts and exercises were clear, concise and relevant to the outcomes and content.', sort_order: 5 },
+          { question_id: qId, row_label: 'Learning material was generally of a high standard, and user-friendly', sort_order: 6 },
+        ]);
+      }
+      await supabase.from('skyline_form_questions').insert({
+        section_id: learnSecId, type: 'long_text', code: 'evaluation.learningComments', label: 'Additional Comments on Learning Evaluation', sort_order: 1, role_visibility: DEFAULT_ROLES, role_editability: DEFAULT_ROLES
+      });
+    }
+  }
 }
 
 export interface CreateFormInput {

@@ -234,9 +234,9 @@ function buildHtml(data: {
 <head>
   <meta charset="UTF-8">
   <style>
-    @page { size: A4; margin: 165px 15mm 70px 15mm; }
+    @page { size: A4; margin: 190px 15mm 70px 15mm; }
     @page :first { margin: 0; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; margin: 0; padding: 0; color: #1f2937; box-sizing: border-box; min-height: 100%; }
+    body { font-family: 'Calibri', 'Calibri Light', Arial, Helvetica, sans-serif; font-size: 11pt; margin: 0; padding: 0; color: #1f2937; box-sizing: border-box; min-height: 100%; }
     .header { position: fixed; top: 0; left: 15mm; right: 15mm; width: calc(100% - 30mm); z-index: 1000; background: #fff; padding: 16px 0 16px 0; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; border-bottom: 1px solid #9ca3af; box-sizing: border-box; overflow: visible; }
     .header-inner { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; width: 100%; gap: 16px; overflow: visible; }
     .header img { max-height: 110px; max-width: 220px; flex-shrink: 0; }
@@ -245,10 +245,10 @@ function buildHtml(data: {
     .divider { height: 1px; background: #9ca3af; margin: 8px 0 14px 0; }
     h2 { font-size: 13pt; font-weight: bold; margin: 0 0 12px 0; color: #1f2937; border-left: 4px solid #9ca3af; padding-left: 8px; }
     h3 { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #1f2937; }
-    .section-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; border-left: 1px solid #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .section-table { width: 100%; border-collapse: collapse; font-size: 11pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; margin: 0 0 12px 0; border: 1px solid #000; border-left: 1px solid #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .section-table th, .section-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: middle; line-height: 1.35; overflow: visible; }
     .section-table td:first-child, .section-table th:first-child { border-left: 1px solid #000 !important; }
-    .sub-section-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 10px 12px; vertical-align: middle; }
+    .sub-section-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 10px 12px; vertical-align: middle; }
     .label-cell { width: 35%; background: #F0F4FA; font-weight: 600; color: #374151; }
     .value-cell { width: 65%; color: #1f2937; background: #F0F4FA; }
     .row-alt .label-cell { background: #F0F4FA; }
@@ -276,7 +276,7 @@ function buildHtml(data: {
     .assessment-submission-other-block .other-underline { display: block; margin: 0 auto; border: none; border-bottom: 1px solid #333; min-width: 200px; min-height: 18px; background: transparent; }
     .assessment-submission-hint { text-align: center; font-size: 8pt; font-style: italic; color: #6b7280; margin-top: 4px; }
     .reasonable-adjustment-section { border: 1px solid #000; margin-bottom: 12px; }
-    .reasonable-adjustment-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
+    .reasonable-adjustment-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
     .reasonable-adjustment-arrow { font-size: 10pt; }
     .reasonable-adjustment-body { padding: 12px; background: #fff; }
     .reasonable-adjustment-radio { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
@@ -288,23 +288,44 @@ function buildHtml(data: {
     .reasonable-adjustment-sig-line { flex: 1; min-width: 120px; border-bottom: 1px solid #333; min-height: 20px; }
     .reasonable-adjustment-date-label { margin-left: 24px; font-weight: 600; }
     .reasonable-adjustment-date-line { flex: 1; min-width: 80px; border-bottom: 1px solid #333; min-height: 20px; }
-    .task-instructions-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
-    .task-questions-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
+    /* Appendix A - Reasonable Adjustments (full layout). Negative margin cancels step-page padding (24px) so Appendix A/B align with Assessment Summary / continued content. */
+    .appendix-a-page { page-break-before: always; padding-top: 0; margin-top: -24px; }
+    .appendix-b-page { page-break-before: always; padding-top: 0; margin-top: -24px; page-break-inside: auto; }
+    /* Keep Appendix B header content and Table A together */
+    .appendix-b-content-wrapper { page-break-inside: avoid; orphans: 3; widows: 3; }
+    .appendix-b-table-a-wrapper { page-break-before: avoid !important; page-break-after: avoid; page-break-inside: avoid; orphans: 3; widows: 3; }
+    .appendix-b-table-b-wrapper { page-break-before: always !important; page-break-inside: avoid; }
+    .appendix-b-table-c-wrapper { page-break-before: always !important; page-break-inside: avoid; }
+    .learner-eval-grey-bar { width: 100%; height: 40px; background: #595959 !important; margin-top: 20px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .appendix-a-title-bar { background: #595959 !important; color: #ffffff !important; font-weight: bold; font-size: 11pt; padding: 10px 12px; margin: 0 0 8px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .appendix-section-bar { background: #595959 !important; color: #ffffff !important; font-weight: bold; font-size: 9pt; padding: 8px 12px; margin: 12px 0 6px 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .appendix-matrix-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin: 0 0 10px 0; border: 1px solid #000; }
+    .appendix-matrix-table th, .appendix-matrix-table td { border: 1px solid #000; padding: 6px 8px; vertical-align: top; line-height: 1.3; }
+    .appendix-matrix-table th { background: #595959 !important; color: #ffffff !important; font-weight: bold; }
+    .appendix-matrix-table .appendix-cb { width: 10px; height: 10px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: #1f2937; background: #fff; margin-right: 6px; vertical-align: middle; }
+    .appendix-matrix-table .appendix-cb.checked { background: #1f2937; color: #fff; }
+    .appendix-matrix-table .appendix-cell-item { display: flex; align-items: flex-start; gap: 4px; margin: 2px 0; }
+    .appendix-declaration-box { border: 1px solid #333; padding: 12px; font-style: italic; margin: 12px 0; line-height: 1.4; background: #fff; }
+    .appendix-footer-bar { font-size: 8pt; color: #374151; margin-bottom: 8px; padding: 6px 12px; background: #d9d9d9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .task-instructions-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
+    .task-questions-page { page-break-before: always; }
+    .task-questions-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
     .task-questions-instruction { background: #6b7280 !important; color: #fff !important; font-size: 9pt; padding: 8px 16px; margin: 0; }
-    .task-instructions-subheader { background: #6b7280 !important; color: #fff !important; font-size: 9pt; padding: 10px 16px; margin: 0; }
+    .task-questions-instruction-label { font-size: 9pt; color: #1f2937; margin: 0 0 8px 0; padding: 0; background: transparent !important; }
+    .task-instructions-subheader { font-size: 9pt; color: #1f2937; margin: 0 0 8px 0; padding: 0; background: transparent !important; }
     .task-instructions-block { margin: 12px 0; }
-    .task-instructions-block-title { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 8px 12px; }
+    .task-instructions-block-title { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 8px 12px; }
     .task-instructions-block-content { padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; line-height: 1.5; }
     .task-instructions-block-content ul { margin: 8px 0; padding-left: 20px; }
     .task-instructions-block-content p { margin: 6px 0; }
     .result-sheet-page { page-break-before: always; }
-    .task-results-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
+    .task-results-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
     .task-results-outcome { margin: 12px 0; }
     .task-results-outcome-title { font-weight: bold; margin-bottom: 6px; }
     .result-sheet-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; }
     .result-sheet-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: top; line-height: 1.35; }
-    .result-sheet-table .result-label { width: 25%; background: #e5e7eb !important; color: #374151; font-weight: 600; }
-    .result-sheet-table .result-label.decl-office-label { background: #f5f0e6 !important; }
+    .result-sheet-table .result-label { width: 25%; background: #595959 !important; color: #ffffff; font-weight: 600; }
+    .result-sheet-table .result-label.decl-office-label { background: #fae6d2 !important;color: #000000;}
     .result-sheet-table .result-value { background: #fff !important; color: #1f2937; }
     .result-sheet-table .answer-line { border: none; border-bottom: 1px solid #333; min-height: 18px; padding: 2px 4px; background: transparent; display: block; }
     .result-sheet-table .answer-line-inline { border: none; border-bottom: 1px solid #333; min-height: 14px; padding: 0 4px 2px; background: transparent; display: inline-block; min-width: 80px; }
@@ -313,47 +334,52 @@ function buildHtml(data: {
     .result-sheet-table .result-radio { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; }
     .result-sheet-table .result-radio .radio-circle { width: 12px; height: 12px; border: 1.5px solid #374151; border-radius: 50%; flex-shrink: 0; }
     .result-sheet-table .result-radio .radio-circle.filled { background: #1f2937; border-color: #1f2937; }
-    .assessment-summary-page { page-break-before: always; }
-    .assessment-summary-header { background: #d1d5db !important; color: #374151 !important; font-weight: bold; font-size: 12pt; padding: 14px 16px; text-align: center; margin: 16px 0 0 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .assessment-summary-intro { background: #fff !important; color: #374151 !important; font-size: 9pt; padding: 12px 16px; margin: 0; line-height: 1.5; border: 1px solid #000; border-top: none; }
-    .assessment-summary-intro .intro-main { font-size: 10pt; font-weight: 600; margin-bottom: 8px; }
-    .assessment-summary-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .assessment-summary-table th, .assessment-summary-table td { border: 1px solid #000; padding: 8px 10px; vertical-align: top; line-height: 1.35; }
-    .assessment-summary-table .summary-label { width: 25%; background: #5E5E5E !important; color: #fff !important; font-weight: 600; }
+    .assessment-summary-page { page-break-before: always; page-break-after: always; page-break-inside: avoid; }
+    .assessment-summary-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 11pt; padding: 10px 12px; text-align: center; margin: 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .assessment-summary-intro { background: #fff !important; color: #374151 !important; font-size: 8.5pt; padding: 8px 12px; margin: 0; line-height: 1.4; border: 1px solid #000; border-top: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .assessment-summary-intro .intro-main { font-size: 9pt; font-weight: 600; margin-bottom: 4px; }
+    .assessment-summary-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin: 0 0 8px 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .assessment-summary-table th, .assessment-summary-table td { border: 1px solid #000; padding: 5px 8px; vertical-align: top; line-height: 1.25; }
+    .assessment-summary-table .summary-label { width: 25%; background: #595959 !important; color: #fff !important; font-weight: 600; }
     .assessment-summary-table .summary-value { background: #fff !important; color: #1f2937; }
     .assessment-summary-table .summary-attempt-value { background: #f3f4f6 !important; color: #1f2937; }
-    .assessment-summary-table .summary-result-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; text-align: center; }
+    .assessment-summary-table .summary-result-header { background: #595959 !important; color: #fff !important; font-weight: bold; text-align: center; }
     .assessment-summary-table .summary-attempt-col { width: 25%; text-align: center; }
-    .assessment-summary-table .summary-office { background: #f5f0e6 !important; color: #1f2937 !important; }
-    .assessment-summary-table .summary-date-line { border: none; border-bottom: 1px solid #333; min-height: 14px; padding: 0 4px 2px; background: transparent; display: inline-block; min-width: 70px; font-size: 8pt; }
-    .assessment-summary-table .summary-cb { width: 14px; height: 14px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: #1f2937; background: #fff; }
+    .assessment-summary-table .summary-label.summary-office { background: #fae6d2 !important; color: #1f2937 !important; }
+    .assessment-summary-table .summary-value.summary-office { background: #fae6d2 !important; color: #1f2937 !important; }
+    .assessment-summary-table .summary-date-line { border: none; border-bottom: 1px solid #333; min-height: 12px; padding: 0 2px 1px; background: transparent; display: inline-block; min-width: 60px; font-size: 7pt; }
+    .assessment-summary-table .summary-cb { width: 12px; height: 12px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; color: #1f2937; background: #fff; }
     .assessment-summary-table .summary-cb.checked { background: #1f2937; color: #fff; }
     .decl-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; border-left: 1px solid #000 !important; }
     .decl-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: middle; line-height: 1.35; overflow: visible; }
     .decl-table td:first-child { border-left: 1px solid #000 !important; }
-    .decl-table .decl-label { width: 35%; background: #F0F4FA; color: #374151; }
-    .decl-table .decl-value { background: #F0F4FA; color: #1f2937; }
+    .decl-table .decl-label { width: 35%; background: #d9d9d9; color: #000000;font-weight: bold; }
+    .decl-table .decl-value { background: #fff; color: #1f2937; }
     .decl-table .decl-sig-value { color: #2563eb; font-style: italic; text-decoration: underline; }
-    .decl-table .decl-other-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; padding: 10px 12px; vertical-align: middle; }
+    .decl-table .decl-other-header { background: #595959 !important; color: #fff !important; font-weight: bold; padding: 10px 12px; vertical-align: middle; }
     .decl-table .decl-office-label { font-style: italic; }
     .decl-sig-heading { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #1f2937; }
+    .assessment-summary-page .answer-box { min-height: 18px; padding: 4px 6px; font-size: 8pt; }
+    .assessment-summary-page .answer-box.answer-box-large { min-height: 48px; }
     .answer-box { border: 1px solid #333; min-height: 24px; padding: 6px 8px; overflow: visible; background: #fff; }
     .answer-box.answer-box-large { min-height: 80px; }
     table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 12px; }
     th, td { border: 1px solid #000; padding: 10px 12px; vertical-align: middle; line-height: 1.35; overflow: visible; }
-    th { background: #5E5E5E; color: #fff; font-weight: bold; }
+    th { background: #595959; color: #fff; font-weight: bold; }
     tbody tr:nth-child(even) { background: #f9fafb; }
     tbody tr:nth-child(odd) { background: #fff; }
-    .likert-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; border-left: 1px solid #000 !important; }
-    .likert-table th, .likert-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: middle; line-height: 1.35; overflow: visible; }
+    .likert-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; margin: 0 0 8px 0; border: 1px solid #000; border-left: 1px solid #000 !important; }
+    .likert-table th, .likert-table td { border: 1px solid #000; padding: 6px 8px; vertical-align: middle; line-height: 1.25; overflow: visible; font-size: 11pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; }
     .likert-table th:first-child, .likert-table td:first-child { border-left: 1px solid #000 !important; }
-    .likert-header { background: #5E5E5E !important; color: #fff !important; font-weight: bold; }
-    .likert-no { width: 48px; min-width: 48px; text-align: center; font-weight: 600; vertical-align: middle; }
-    .likert-criteria { font-weight: 600; vertical-align: middle; }
-    .likert-scale { min-width: 32px; width: 32px; height: 140px; padding: 12px 6px; overflow: visible; font-size: 9pt; box-sizing: border-box; vertical-align: middle; }
+    .likert-header { background: #595959 !important; color: #fff !important; font-weight: bold; }
+    .likert-no { width: 4%; text-align: center; font-weight: 600; vertical-align: middle; font-size: 11pt; }
+    .likert-criteria { width: 50%; font-weight: 600; vertical-align: middle; font-size: 11pt; word-wrap: break-word; }
+    .likert-scale { width: 9.2%; height: 100px; padding: 6px 3px; overflow: visible; font-size: 9pt; box-sizing: border-box; vertical-align: middle; }
     .likert-scale-inner { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 100%; overflow: visible; }
     .likert-scale-inner span { display: inline-block; transform: rotate(-90deg); transform-origin: center center; white-space: nowrap; line-height: 1.2; }
-    .likert-section-row td { background: #5E5E5E !important; color: #fff !important; font-weight: bold; font-size: 9pt; }
+    .likert-section-row td { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 11pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; }
+    /* Keep likert table and its comments box on same page */
+    .likert-table-with-comments { page-break-inside: avoid; }
     .likert-table tbody .likert-no { background: #e5e7eb !important; color: #1f2937; }
     .likert-table tbody .likert-criteria { background: #e5e7eb !important; color: #1f2937; }
     .likert-table tbody .row-alt .likert-no { background: #f3f4f6 !important; }
@@ -640,9 +666,27 @@ function buildHtml(data: {
   let headerNum = 1;
   for (const group of pageGroups) {
     html += `<div class="step-page">`;
-    for (const { sections } of group) {
+    for (const { step, sections } of group) {
+      const isLearnerEvaluation = (step?.title || '').trim() === 'Learner Evaluation';
+      let learnerEvalIntroShown = false;
+      const learnerEvalLikertSections = isLearnerEvaluation ? sections.filter(s => s.section.pdf_render_mode === 'likert_table').sort((a, b) => b.section.sort_order - a.section.sort_order) : [];
+      const lastLikertSectionId = learnerEvalLikertSections.length > 0 ? learnerEvalLikertSections[0].section.id : null;
       for (const { section, questions } of sections) {
-      if (section.pdf_render_mode !== 'declarations' && section.pdf_render_mode !== 'reasonable_adjustment' && section.pdf_render_mode !== 'task_instructions' && section.pdf_render_mode !== 'task_results' && section.pdf_render_mode !== 'task_questions' && section.pdf_render_mode !== 'assessment_summary') {
+      if (isLearnerEvaluation && !learnerEvalIntroShown) {
+        html += '<div class="appendix-b-page">';
+        html += '<div class="appendix-b-content-wrapper">';
+        html += '<div class="appendix-a-title-bar" style="text-align:center">Appendix B - Learner Evaluation Form</div>';
+        html += '<p style="margin:8px 0;line-height:1.4;font-size:11pt">Please complete this evaluation form as thoroughly as you can, in order for us to continuously improve our training quality. The purpose of the evaluation form is to evaluate the areas below:</p>';
+        html += '<ul style="margin:0 0 8px 0;padding-left:20px;line-height:1.4;font-size:11pt">';
+        html += '<li>logistics and support</li>';
+        html += '<li>facilitation</li>';
+        html += '<li>training material</li>';
+        html += '<li>assessment</li>';
+        html += '</ul>';
+        html += '<p style="margin:0 0 10px 0;line-height:1.4;font-size:11pt">Your honest and detailed input is therefore of great value to us, and we appreciate your assistance in completing this evaluation form!</p>';
+        learnerEvalIntroShown = true;
+      }
+      if (section.pdf_render_mode !== 'declarations' && section.pdf_render_mode !== 'reasonable_adjustment' && section.pdf_render_mode !== 'task_instructions' && section.pdf_render_mode !== 'task_results' && section.pdf_render_mode !== 'task_questions' && section.pdf_render_mode !== 'assessment_summary' && section.title !== 'Assessment Summary Sheet' && !isLearnerEvaluation) {
         html += `<h3>${headerNum}. ${section.title}</h3>`;
         headerNum++;
         if (section.description) html += `<p>${section.description}</p>`;
@@ -651,32 +695,95 @@ function buildHtml(data: {
         headerNum++;
       }
 
-      if (section.pdf_render_mode === 'likert_table') {
-
+      if (isLearnerEvaluation && section.title === 'Participant Information') {
+        html += '<table class="section-table" style="margin-bottom:10px;width:100%"><tbody>';
+        const participantQs = questions.filter(q => q.question.type === 'short_text').sort((a, b) => a.question.sort_order - b.question.sort_order);
+        const leftQs = participantQs.slice(0, 3);
+        const rightQs = participantQs.slice(3, 6);
+        for (let i = 0; i < 3; i++) {
+          const leftQ = leftQs[i];
+          const rightQ = rightQs[i];
+          const leftVal = leftQ ? String(answers.get(`q-${leftQ.question.id}`) ?? '') : '';
+          const rightVal = rightQ ? String(answers.get(`q-${rightQ.question.id}`) ?? '') : '';
+          html += '<tr>';
+          html += `<td class="label-cell" style="width:25%;background:#595959 !important;color:#fff !important;font-weight:600;border:1px solid #000">${leftQ?.question.label || ''}</td>`;
+          html += `<td class="value-cell" style="width:25%;background:#fff;border:1px solid #000">${leftVal}</td>`;
+          html += `<td class="label-cell" style="width:25%;background:#595959 !important;color:#fff !important;font-weight:600;border:1px solid #000">${rightQ?.question.label || ''}</td>`;
+          html += `<td class="value-cell" style="width:25%;background:#fff;border:1px solid #000">${rightVal}</td>`;
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+      } else if (section.pdf_render_mode === 'likert_table') {
+        // For Learner Evaluation: A (sort_order=1) stays with Appendix B header (no break), B (sort_order=2) and C (sort_order=3) each get their own page
+        const isSectionA = isLearnerEvaluation && section.sort_order === 1;
+        const isSectionB = isLearnerEvaluation && section.sort_order === 2;
+        const isSectionC = isLearnerEvaluation && section.sort_order === 3;
+        const isLastSection = isLearnerEvaluation && section.id === lastLikertSectionId;
+        
+        // Structure: content-wrapper contains header + Table A, then Table B and C get separate pages
+        if (isSectionA) {
+          // Table A stays in content-wrapper - no page break, keep together with header
+          html += `<div class="appendix-b-table-a-wrapper" style="margin-bottom:12px;page-break-before:avoid !important;page-break-inside:avoid;">`;
+        } else {
+          // Table B/C: content-wrapper should already be closed after Table A
+          // Determine wrapper class for B and C with explicit page breaks
+          let wrapperClass = '';
+          let inlineStyle = 'margin-bottom:12px;';
+          if (isSectionB) {
+            wrapperClass = 'appendix-b-table-b-wrapper';
+            inlineStyle += 'page-break-before:always !important;page-break-inside:avoid;';
+          } else if (isSectionC) {
+            wrapperClass = 'appendix-b-table-c-wrapper';
+            inlineStyle += 'page-break-before:always !important;page-break-inside:avoid;';
+          }
+          html += `<div class="${wrapperClass}" style="${inlineStyle}">`;
+        }
         const scaleLabels = ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'];
+        html += '<div class="likert-table-with-comments">';
         html += '<table class="likert-table"><thead><tr>';
         html += '<th class="likert-header likert-no">No.</th><th class="likert-header likert-criteria">Criteria/Question</th>';
         for (const lbl of scaleLabels) html += `<th class="likert-header likert-scale"><div class="likert-scale-inner"><span>${lbl}</span></div></th>`;
         html += '</tr><tr class="likert-section-row">';
-        html += `<td class="likert-no"></td><td colspan="6" class="likert-section-title">${section.title}</td>`;
+        const sectionLetter = section.sort_order >= 1 ? String.fromCharCode(64 + section.sort_order) : '';
+        const sectionTitleText = sectionLetter ? `${sectionLetter}. ${section.title}` : section.title;
+        html += `<td class="likert-no">${sectionLetter}</td><td colspan="6" class="likert-section-title">${sectionTitleText}</td>`;
         html += '</tr></thead><tbody>';
         let rowNum = 1;
         for (const { question, rows } of questions) {
-          for (const row of rows) {
-            const key = `q-${question.id}-${row.id}`;
-            const val = answers.get(key);
-            const sel = val != null ? String(val) : '';
-            const rowClass = rowNum % 2 === 0 ? 'row-alt' : 'row-normal';
-            html += `<tr class="${rowClass}"><td class="likert-no">${rowNum}</td><td class="likert-criteria">${row.row_label}</td>`;
-            for (let i = 1; i <= 5; i++) {
-              const filled = sel === String(i);
-              html += `<td class="likert-radio"><span class="radio-circle${filled ? ' filled' : ''}"></span></td>`;
+          if (question.type === 'likert_5') {
+            for (const row of rows) {
+              const key = `q-${question.id}-${row.id}`;
+              const val = answers.get(key);
+              const sel = val != null ? String(val) : '';
+              const rowClass = rowNum % 2 === 0 ? 'row-alt' : 'row-normal';
+              html += `<tr class="${rowClass}"><td class="likert-no">${rowNum}</td><td class="likert-criteria">${row.row_label}</td>`;
+              for (let i = 1; i <= 5; i++) {
+                const filled = sel === String(i);
+                html += `<td class="likert-radio"><span class="radio-circle${filled ? ' filled' : ''}"></span></td>`;
+              }
+              html += '</tr>';
+              rowNum++;
             }
-            html += '</tr>';
-            rowNum++;
           }
         }
         html += '</tbody></table>';
+        const commentsQ = questions.find(q => q.question.type === 'long_text' && q.question.code?.includes('Comments'));
+        if (commentsQ) {
+          const commentsVal = String(answers.get(`q-${commentsQ.question.id}`) ?? '');
+          html += `<div style="margin-top:8px;font-family:'Calibri','Calibri Light',Arial,sans-serif;font-size:11pt"><div style="font-weight:600;margin-bottom:4px">${commentsQ.question.label}</div>`;
+          html += `<div class="answer-box answer-box-large" style="min-height:50px;font-size:11pt">${commentsVal}</div></div>`;
+        }
+        html += '</div>'; // close likert-table-with-comments
+        // Add grey bar inside the wrapper for C so it stays on same page
+        if (isLastSection) {
+          html += '<div class="learner-eval-grey-bar"></div>';
+        }
+        html += '</div>'; // Close table wrapper
+        
+        // Close content-wrapper after Table A
+        if (isSectionA) {
+          html += '</div>'; // Close appendix-b-content-wrapper
+        }
       } else if (section.pdf_render_mode === 'grid_table') {
         const pm = (questions[0]?.question?.pdf_meta as Record<string, unknown>) || {};
         const cols = (Array.isArray(pm.columns) ? pm.columns : ['Column 1', 'Column 2']) as string[];
@@ -787,8 +894,8 @@ function buildHtml(data: {
           }
         }
       } else if (section.pdf_render_mode === 'task_questions') {
-        html += `<div class="task-questions-header">${headerNum}. ${section.title}</div>`;
-        html += `<div class="task-questions-instruction">Provide your response to each question in the box below.</div>`;
+        html += '<div class="task-questions-page">';
+        html += `<div class="task-questions-instruction-label">Provide your response to each question in the box below.</div>`;
         headerNum++;
         const normalQs = questions.filter((q) => q.question.type !== 'instruction_block' && q.question.type !== 'page_break');
         html += '<table class="section-table task-questions-table"><thead><tr><th class="sub-section-header" style="width:75%">Question</th><th class="sub-section-header" style="width:25%;text-align:center">Satisfactory response</th></tr></thead><tbody>';
@@ -849,6 +956,7 @@ function buildHtml(data: {
           html += '</td></tr>';
         }
         html += '</tbody></table>';
+        html += '</div>'; // Close task-questions-page wrapper
       } else if (section.pdf_render_mode === 'task_results') {
         const rowId = section.assessment_task_row_id;
         const row = rowId ? taskRowsMap.get(rowId) : null;
@@ -882,9 +990,9 @@ function buildHtml(data: {
         html += '</td></tr>';
         html += '</tbody></table>';
         html += '<table class="result-sheet-table"><tbody>';
-        html += '<tr><td class="result-label">Trainer/Assessor Name</td><td class="result-value"><div class="answer-line">' + (rd?.trainer_name ?? '') + '</div></td></tr>';
-        html += '<tr><td class="result-label">Trainer/Assessor Signature</td><td class="result-value"><div class="answer-line">' + (rd?.trainer_signature ?? '') + '</div></td></tr>';
-        html += '<tr><td class="result-label">Date</td><td class="result-value"><div class="answer-box" style="min-height:24px;min-width:120px;">' + (rd?.trainer_date ?? '') + '</div></td></tr>';
+        html += '<tr><td class="result-label">Trainer/Assessor Name</td><td class="result-value">' + (rd?.trainer_name ?? '') + '</div></td></tr>';
+        html += '<tr><td class="result-label">Trainer/Assessor Signature</td><td class="result-value">' + (rd?.trainer_signature ?? '') + '</div></td></tr>';
+        html += '<tr><td class="result-label">Date</td><td class="result-value">' + (rd?.trainer_date ?? '') + '</div></td></tr>';
         const officeEntry = resultsOffice.get(section.id);
         const officeDate = officeEntry?.entered_date ?? '';
         const officeName = officeEntry?.entered_by ?? '';
@@ -892,7 +1000,7 @@ function buildHtml(data: {
         html += 'The outcome of this assessment has been entered into the Student Management System on <span class="answer-line-inline">' + officeDate + '</span> (insert date) by <span class="answer-line-inline">' + officeName + '</span> (insert Name)';
         html += '</td></tr>';
         html += '</tbody></table></div>';
-      } else if (section.pdf_render_mode === 'assessment_summary') {
+      } else if (section.pdf_render_mode === 'assessment_summary' || section.title === 'Assessment Summary Sheet') {
         const taskRowsOrdered: { id: number; row_label: string }[] = [];
         const taskRowToSectionId = new Map<number, number>();
         for (const g of steps) {
@@ -923,8 +1031,12 @@ function buildHtml(data: {
         html += '<table class="assessment-summary-table"><thead><tr><th class="summary-label">Please attach the following evidence to this form</th><th colspan="3" class="summary-result-header">Result</th></tr>';
         html += '<tr><th class="summary-label"></th><th class="summary-result-header summary-attempt-col">1st Attempt</th><th class="summary-result-header summary-attempt-col">2nd Attempt</th><th class="summary-result-header summary-attempt-col">3rd Attempt</th></tr></thead><tbody>';
         if (taskRowsOrdered.length === 0) {
-          // Show default placeholder rows if no tasks exist yet
+          // Default placeholder rows so new forms always show full table structure (match reference image)
           html += '<tr><td class="summary-label">Assessment Task 1</td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td></tr>';
+          html += '<tr><td class="summary-label">Assessment Task 2</td>';
           html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td>';
           html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td>';
           html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td></tr>';
@@ -963,38 +1075,89 @@ function buildHtml(data: {
         html += '<tr><td class="summary-label summary-office" colspan="2">Administrative use only - Entered onto Student Management Database</td><td class="summary-label summary-office">Initials</td><td class="summary-value summary-office"><span class="summary-date-line" style="min-width:60px">' + (sum.admin_initials ?? '') + '</span></td></tr>';
         html += '</tbody></table></div>';
       } else if (section.pdf_render_mode === 'reasonable_adjustment') {
-        const yesNoQ = questions.find((q) => q.question.type === 'yes_no');
+        const stepTitle = (step?.title || '').trim();
+        const isAppendixA = /Appendix\s*A/i.test(stepTitle);
         const taskQ = questions.find((q) => q.question.code === 'reasonable_adjustment.task');
         const descQ = questions.find((q) => q.question.code === 'reasonable_adjustment.description');
         const sigQ = questions.find((q) => q.question.type === 'signature');
-        const appliedVal = yesNoQ ? String(answers.get(`q-${yesNoQ.question.id}`) ?? '') : '';
+        const yesNoQ = questions.find((q) => q.question.type === 'yes_no');
         const taskVal = taskQ ? String(answers.get(`q-${taskQ.question.id}`) ?? '') : '';
         const descVal = descQ ? String(answers.get(`q-${descQ.question.id}`) ?? '') : '';
+        const appliedVal = yesNoQ ? String(answers.get(`q-${yesNoQ.question.id}`) ?? '') : '';
         const yesChecked = appliedVal.toLowerCase() === 'yes' || appliedVal === 'true';
         const noChecked = appliedVal.toLowerCase() === 'no' || appliedVal === 'false' || (!yesChecked && appliedVal !== '');
         let sigVal: string | null = null;
         let dateVal = '';
+        let trainerNameVal = String(codeToValue.get('trainer.fullName') ?? '');
         if (sigQ) {
           const v = answers.get(`q-${sigQ.question.id}`);
           if (v && typeof v === 'object' && !Array.isArray(v)) {
             const o = v as Record<string, unknown>;
             sigVal = typeof o.signature === 'string' ? o.signature : (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null);
             dateVal = String(o.date ?? o.signedAtDate ?? '');
+            if (o.name != null || o.fullName != null) trainerNameVal = String(o.name ?? o.fullName ?? '');
           } else if (typeof v === 'string' && v.startsWith('data:')) {
             sigVal = v;
           }
         }
         const sigDisplay = sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : '';
-        html += '<div class="reasonable-adjustment-section">';
-        html += '<div class="reasonable-adjustment-header"><span class="reasonable-adjustment-arrow">&#9654;</span> Reasonable Adjustment</div>';
-        html += '<div class="reasonable-adjustment-body">';
-        html += `<div class="question"><div class="question-label">${yesNoQ?.question.label || 'Was reasonable adjustment applied to any of these assessment tasks?'}</div>`;
-        html += '<div class="reasonable-adjustment-radio"><span class="radio-circle' + (yesChecked ? ' filled' : '') + '"></span> Yes</div>';
-        html += '<div class="reasonable-adjustment-radio"><span class="radio-circle' + (noChecked ? ' filled' : '') + '"></span> No</div></div>';
-        html += `<div class="question"><div class="question-label">${taskQ?.question.label || 'If yes, which assessment task was this applied to?'}</div><div class="answer-box">${taskVal}</div></div>`;
-        html += `<div class="question"><div class="question-label">${descQ?.question.label || 'Provide a description of the adjustment applied and explain reasons.'}</div><div class="answer-box reasonable-adjustment-desc">${descVal}</div></div>`;
-        html += '<div class="reasonable-adjustment-sig-row"><span class="reasonable-adjustment-sig-label">Trainer Signature:</span><span class="reasonable-adjustment-sig-line">' + sigDisplay + '</span><span class="reasonable-adjustment-date-label">Date:</span><span class="reasonable-adjustment-date-line">' + dateVal + '</span></div>';
-        html += '</div></div>';
+        if (!isAppendixA) {
+          html += `<h3>${headerNum}. Reasonable Adjustment</h3>`;
+          headerNum++;
+          if (section.description) {
+            const desc = section.description;
+            const inCaseIdx = desc.search(/In the case that/i);
+            const beforeInCase = inCaseIdx >= 0 ? desc.slice(0, inCaseIdx).trim() : desc;
+            const inCasePart = inCaseIdx >= 0 ? desc.slice(inCaseIdx).trim() : '';
+            if (beforeInCase) html += `<p style="margin:0 0 10px 0;line-height:1.5">${beforeInCase.replace(/\n/g, '<br/>')}</p>`;
+            if (inCasePart) html += `<p style="margin:0 0 12px 0;line-height:1.5;font-style:italic">${inCasePart.replace(/\n/g, '<br/>')}</p>`;
+          }
+          html += '<div class="reasonable-adjustment-section">';
+          html += '<div class="reasonable-adjustment-header"><span class="reasonable-adjustment-arrow">&#9654;</span> Reasonable Adjustment</div>';
+          html += '<div class="reasonable-adjustment-body">';
+          html += `<div class="question"><div class="question-label">${yesNoQ?.question.label || 'Was reasonable adjustment applied to any of these assessment tasks?'}</div>`;
+          html += '<div class="reasonable-adjustment-radio"><span class="radio-circle' + (yesChecked ? ' filled' : '') + '"></span> Yes</div>';
+          html += '<div class="reasonable-adjustment-radio"><span class="radio-circle' + (noChecked ? ' filled' : '') + '"></span> No</div></div>';
+          html += `<div class="question"><div class="question-label">${taskQ?.question.label || 'If yes, which assessment task was this applied to?'}</div><div class="answer-box">${taskVal}</div></div>`;
+          html += `<div class="question"><div class="question-label">${descQ?.question.label || 'Provide a description of the adjustment applied and explain reasons.'}</div><div class="answer-box reasonable-adjustment-desc">${descVal}</div></div>`;
+          html += '<div class="reasonable-adjustment-sig-row"><span class="reasonable-adjustment-sig-label">Trainer Signature:</span><span class="reasonable-adjustment-sig-line">' + sigDisplay + '</span><span class="reasonable-adjustment-date-label">Date:</span><span class="reasonable-adjustment-date-line">' + dateVal + '</span></div>';
+          html += '</div></div>';
+        } else {
+        html += '<div class="appendix-a-page">';
+        html += '<div class="appendix-a-title-bar">Appendix A – Reasonable Adjustments</div>';
+        html += '<div class="appendix-section-bar">Write (task name and number) where reasonable adjustments have been applied:</div>';
+        html += '<div class="answer-box answer-box-large" style="min-height:60px;margin-bottom:14px">' + (taskVal || '') + '</div>';
+        html += '<div class="appendix-section-bar">Reasonable Adjustments</div>';
+        html += '<ul style="margin:0 0 12px 0;padding-left:20px;line-height:1.45">';
+        html += '<li>Students with carer responsibilities, cultural or religious obligations, English as an additional language, disability etc., can request for reasonable adjustments.</li>';
+        html += '<li>Please note, academic standards of the unit/course will not be lowered to accommodate the needs of any student, but there is a requirement to be flexible about the way in which it is delivered or assessed.</li>';
+        html += '<li>The Disability Standards for Education requires institutions to take reasonable steps to enable the student with a disability to participate in education on the same basis as a student without a disability.</li>';
+        html += '<li>The trainer/assessor must complete the section below "Reasonable Adjustment Strategies Matrix" to ensure the explanation and correct strategy have been recorded and implemented.</li>';
+        html += '<li>The trainer/assessor must notify the administration/compliance and quality assurance department for any reasonable adjustments made.</li>';
+        html += '<li>All evidence and supplementary documentation must be submitted with the assessment pack to the administration/compliance and quality assurance department.</li>';
+        html += '</ul>';
+        html += '<table class="appendix-matrix-table"><thead><tr><th>Category</th><th>Possible Issue</th><th>Reasonable Adjustment Strategy (select as applicable)</th></tr></thead><tbody>';
+        html += '<tr><td><div class="appendix-cell-item"><span class="appendix-cb"></span> LLN</div></td><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Speaking</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Reading</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Writing</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Confidence</div></td><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Verbal assessment</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Presentations</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Demonstration of a skill</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Use of diagrams</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Use of supporting documents such as wordlists</div></td></tr>';
+        html += '<tr><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Non-English Speaking Background</div></td><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Speaking</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Reading</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Writing</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Cultural background</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Confidence</div></td><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Discuss with the student and Supervisor (if applicable) whether language, literacy and numeracy are likely to impact on the assessment process</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Use methods that do not require a higher level of language or literacy than is required to perform the job role</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Use short sentences that do not contain large amounts of information</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Clarify information by rephrasing, confirm understanding</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Read any printed information to the student</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Use graphics, pictures and colour coding instead of, or to support, text</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Offer to write down, or have someone else write, oral responses given by the student</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Ensure that the time available to complete the assessment, while meeting enterprise requirements, takes account of the student\'s needs</div></td></tr>';
+        html += '</tbody></table>';
+        html += '<div class="appendix-section-bar">Reasonable Adjustment Strategies Matrix (Trainer/Assessor to complete)</div>';
+        html += '<table class="appendix-matrix-table"><thead><tr><th>Category</th><th>Reasonable Adjustment Strategy (select as applicable)</th></tr></thead><tbody>';
+        html += '<tr><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Indigenous – Knowledge and understanding</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Flexibility</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Services</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Inappropriate training and assessment</div></td><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Culturally appropriate training</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Explore understanding of concepts and practical application through oral assessment</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Flexible delivery</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Using group rather than individual assessments</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Assessment through completion of practical tasks in the field after demonstration of skills and knowledge.</div></td></tr>';
+        html += '<tr><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Age – Educational background</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Limited study skills</div></td><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Make sure font size is not too small</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Trainer/Assessor should refer to the student\'s experience</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Ensure that the time available to complete the assessment takes account of the student\'s needs</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Provision of information or course materials in an accessible format.</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Changes in teaching practices, e.g. wearing an FM microphone to enable a student to hear lectures</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Supply of specialised equipment or services, e.g. a note-taker for a student who cannot write</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Changes in lecture schedules and arrangements, e.g. relocating classes to an accessible venue</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Changes to course design, e.g. substituting an assessment task</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Modifications to the physical environment, e.g. installing lever taps, building ramps, installing a lift</div></td></tr>';
+        html += '<tr><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Educational background – Reading</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Writing</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Numeracy</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Limited study skills and/or learning strategies</div></td><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Discuss with the Student previous learning experience</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Ensure learning and assessment methods meet the student\'s individual need</div></td></tr>';
+        html += '<tr><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Disability – Speaking</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Reading</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Writing</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Numeracy</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Limited study skills and/or learning strategies</div></td><td><div class="appendix-cell-item"><span class="appendix-cb"></span> Identify the issues</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Create a climate of support</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Ensure access to support that the student has agreed to</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Appropriately structure the assessment</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Provide information or course materials in an accessible format, e.g. a textbook in braille</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Changes in teaching practices, e.g. wearing an FM microphone to enable a student to hear lectures</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Supply of specialised equipment or services, e.g. a note-taker for a student who cannot write</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Changes in lecture schedules and arrangements, e.g. relocating classes to an accessible venue</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Changes to course design, e.g. substituting an assessment task</div><div class="appendix-cell-item"><span class="appendix-cb"></span> Modifications to the physical environment, e.g. installing lever taps, building ramps, installing a lift</div></td></tr>';
+        html += '</tbody></table>';
+        html += '<div class="appendix-section-bar">Explanation of reasonable adjustments strategy used</div>';
+        html += '<div class="answer-box answer-box-large" style="min-height:100px;margin-bottom:14px">' + (descVal || '') + '</div>';
+        const declarationText = 'I declare that I have attached all relevant evidence to provide reasonable adjustment. The training package guidelines and criteria have not been compromised in the process of providing reasonable adjustment to the student. I declare that I have conducted a fair, valid, reliable, and flexible assessment. I have provided explanation of reasonable adjustments strategy used, as required.';
+        html += '<table class="decl-table" style="margin-bottom:14px"><tbody>';
+        html += '<tr><td class="decl-label" style="width:35%">Trainer/Assessor Name</td><td class="decl-value">' + (trainerNameVal || '') + '</td></tr>';
+        html += '<tr><td class="decl-label">Trainer/Assessor Declaration</td><td class="decl-value"><span style="font-style:italic;line-height:1.4">' + declarationText + '</span></td></tr>';
+        html += '<tr><td class="decl-label" style="width:35%">Trainer/Assessor Signature</td><td class="decl-value">' + sigDisplay + '</td></tr>';
+        html += '<tr><td class="decl-label">Date</td><td class="decl-value">' + (dateVal || '') + '</td></tr>';
+        html += '</tbody></table>';
+        html += '</div>';
+        }
       } else if (section.pdf_render_mode === 'declarations') {
         const sectionTitle = section.title.toLowerCase();
         if (sectionTitle.includes('final declaration')) {
@@ -1138,6 +1301,9 @@ function buildHtml(data: {
           }
           html += '</table>';
         }
+      }
+      if (isLearnerEvaluation && learnerEvalIntroShown) {
+        html += '</div>';
       }
     }
   }
@@ -1317,7 +1483,7 @@ app.get('/pdf/:instanceId', async (req, res) => {
     const restPdf = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '165px', right: '15mm', bottom: '70px', left: '15mm' },
+      margin: { top: '190px', right: '15mm', bottom: '70px', left: '15mm' },
       displayHeaderFooter: true,
       headerTemplate: headerHtml,
       footerTemplate: footerHtml,
