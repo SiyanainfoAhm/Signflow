@@ -1,5 +1,5 @@
 /**
- * Default steps 5-20 added when creating a new form.
+ * Default steps 5-19 added when creating a new form (ends at Special needs).
  * Reasonable Adjustment (step 15) is trainer-only editable.
  */
 
@@ -333,24 +333,6 @@ Every assessment has a 'Feedback to Student' section where all information must 
             type: 'instruction_block',
             label: 'Special needs',
             help_text: 'Candidates with special needs should notify their trainer/assessor to request any required adjustments as soon as possible. This will enable the trainer/assessor to address the identified needs immediately.',
-            role_visibility: READ_ONLY_VISIBLE,
-            role_editability: { student: false, trainer: false, office: false },
-          },
-        ],
-      },
-    ],
-  },
-  {
-    title: 'For more information',
-    sections: [
-      {
-        title: 'For more information',
-        pdf_render_mode: 'normal',
-        questions: [
-          {
-            type: 'instruction_block',
-            label: 'For more information',
-            help_text: 'For more information, please refer to the Training Organisation\'s Student Handbook.',
             role_visibility: READ_ONLY_VISIBLE,
             role_editability: { student: false, trainer: false, office: false },
           },

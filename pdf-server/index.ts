@@ -236,39 +236,43 @@ function buildHtml(data: {
   <style>
     @page { size: A4; margin: 190px 15mm 70px 15mm; }
     @page :first { margin: 0; }
-    body { font-family: 'Calibri', 'Calibri Light', Arial, Helvetica, sans-serif; font-size: 11pt; margin: 0; padding: 0; color: #1f2937; box-sizing: border-box; min-height: 100%; }
+    body { font-family: 'Calibri', 'Calibri Light', Arial, Helvetica, sans-serif; font-size: 11pt; margin: 0; padding: 0; color: #000000; box-sizing: border-box; min-height: 100%; }
     .header { position: fixed; top: 0; left: 15mm; right: 15mm; width: calc(100% - 30mm); z-index: 1000; background: #fff; padding: 16px 0 16px 0; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; border-bottom: 1px solid #9ca3af; box-sizing: border-box; overflow: visible; }
     .header-inner { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; width: 100%; gap: 16px; overflow: visible; }
     .header img { max-height: 110px; max-width: 220px; flex-shrink: 0; }
     .header-address { text-align: right; font-size: 8pt; color: #374151; line-height: 1.35; flex-shrink: 0; overflow: visible; padding-left: 12px; }
     .header-address a { color: #2563eb; text-decoration: underline; }
     .divider { height: 1px; background: #9ca3af; margin: 8px 0 14px 0; }
-    h2 { font-size: 13pt; font-weight: bold; margin: 0 0 12px 0; color: #1f2937; border-left: 4px solid #9ca3af; padding-left: 8px; }
-    h3 { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #1f2937; }
+    h2 { font-size: 13pt; font-weight: bold; margin: 0 0 12px 0; color: #000000; border-left: 4px solid #9ca3af; padding-left: 8px; }
+    h3 { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #000000; }
+    .step-page:not(.intro-page) h3 { color: #595959; font-size: 14pt; font-weight: bold; margin: 12px 0 6px 0; }
     .section-table { width: 100%; border-collapse: collapse; font-size: 11pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; margin: 0 0 12px 0; border: 1px solid #000; border-left: 1px solid #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .section-table th, .section-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: middle; line-height: 1.35; overflow: visible; }
     .section-table td:first-child, .section-table th:first-child { border-left: 1px solid #000 !important; }
-    .sub-section-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 10px 12px; vertical-align: middle; }
+    .sub-section-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 10pt;font-family:'Calibri','Calibri Light',Arial,sans-serif; padding: 10px 12px; vertical-align: middle; }
     .label-cell { width: 35%; background: #F0F4FA; font-weight: 600; color: #374151; }
-    .value-cell { width: 65%; color: #1f2937; background: #F0F4FA; }
-    .row-alt .label-cell { background: #F0F4FA; }
-    .row-alt .value-cell { background: #F0F4FA; }
+    .value-cell { width: 65%; color: #000000; background: #F0F4FA; }
+    .section-table .label-cell, .section-table .row-alt .label-cell, .section-table .row-normal .label-cell { background: #fff !important; font-weight: normal; color: #000;font-family:'Calibri','Calibri Light',Arial,sans-serif; }
+    .section-table .value-cell, .section-table .row-alt .value-cell, .section-table .row-normal .value-cell { background: #fff !important; color: #000; font-size: 10pt;font-family:'Calibri','Calibri Light',Arial,sans-serif; }
+    .row-alt .label-cell { color: #000000; background: #F0F4FA; }
+    .row-alt .value-cell { color: #000000; background: #F0F4FA; }
     .row-normal .label-cell, .row-normal .value-cell { background: #F0F4FA; }
     .question { margin: 12px 0; overflow: visible; }
     .question-label { font-weight: bold; margin-bottom: 4px; overflow: visible; line-height: 1.4; }
-    .decl-heading-bar { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #1f2937; border-left: 4px solid #9ca3af; padding-left: 8px; }
+    .decl-heading-bar { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #000000; border-left: 4px solid #9ca3af; padding-left: 8px; }
     .declarations-section { border: 1px solid #000; border-left: 1px solid #000 !important; padding: 12px; background: #fff; margin-bottom: 12px; }
+    .declarations-section.declarations-section-no-border { border: none !important; padding: 0; background: transparent; }
     .declarations-section .question { margin: 10px 0; }
     .declarations-section .question:first-child { padding-top: 0; margin-top: 0; }
     .declarations-section .question-label { font-style: italic; font-weight: 500; }
     .declaration-checkbox { display: inline-flex; align-items: flex-start; gap: 10px; }
-    .declaration-checkbox .cb { width: 18px; height: 18px; border: 1px solid #d1d5db; border-radius: 3px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #1f2937; background: #fff; }
-    .declaration-checkbox .cb.checked { color: #1f2937; }
+    .declaration-checkbox .cb { width: 18px; height: 18px; border: 1px solid #d1d5db; border-radius: 3px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #000000; background: #fff; }
+    .declaration-checkbox .cb.checked { color: #000000; }
     .assessment-submission-section { border: 1px solid #000; padding: 12px; background: #fff; margin-bottom: 12px; }
     .assessment-submission-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
     .assessment-submission-item { display: inline-flex; align-items: center; gap: 8px; }
-    .assessment-submission-item .cb { width: 18px; height: 18px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #1f2937; background: #fff; }
-    .assessment-submission-item .cb.checked { background: #1f2937; color: #fff; }
+    .assessment-submission-item .cb { width: 18px; height: 18px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #000000; background: #fff; }
+    .assessment-submission-item .cb.checked { background: #000000; color: #fff; }
     .assessment-submission-item .question-label { font-weight: normal; font-style: normal; }
     .assessment-submission-item .cb-inline-input { border: none; border-bottom: 1px solid #333; min-width: 120px; flex: 1; background: transparent; padding: 2px 4px; font-size: 9pt; display: inline-block; }
     .assessment-submission-item.span-full { grid-column: 1 / -1; }
@@ -281,7 +285,7 @@ function buildHtml(data: {
     .reasonable-adjustment-body { padding: 12px; background: #fff; }
     .reasonable-adjustment-radio { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
     .reasonable-adjustment-section .radio-circle { display: inline-block; width: 12px; height: 12px; border: 1.5px solid #4b5563; border-radius: 50%; }
-    .reasonable-adjustment-section .radio-circle.filled { background: #1f2937; border-color: #1f2937; }
+    .reasonable-adjustment-section .radio-circle.filled { background: #000000; border-color: #000000; }
     .reasonable-adjustment-desc { min-height: 48px; }
     .reasonable-adjustment-sig-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
     .reasonable-adjustment-sig-label { font-weight: 600; }
@@ -302,17 +306,17 @@ function buildHtml(data: {
     .appendix-matrix-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin: 0 0 10px 0; border: 1px solid #000; }
     .appendix-matrix-table th, .appendix-matrix-table td { border: 1px solid #000; padding: 6px 8px; vertical-align: top; line-height: 1.3; }
     .appendix-matrix-table th { background: #595959 !important; color: #ffffff !important; font-weight: bold; }
-    .appendix-matrix-table .appendix-cb { width: 10px; height: 10px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: #1f2937; background: #fff; margin-right: 6px; vertical-align: middle; }
-    .appendix-matrix-table .appendix-cb.checked { background: #1f2937; color: #fff; }
+    .appendix-matrix-table .appendix-cb { width: 10px; height: 10px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: #000000; background: #fff; margin-right: 6px; vertical-align: middle; }
+    .appendix-matrix-table .appendix-cb.checked { background: #000000; color: #fff; }
     .appendix-matrix-table .appendix-cell-item { display: flex; align-items: flex-start; gap: 4px; margin: 2px 0; }
     .appendix-declaration-box { border: 1px solid #333; padding: 12px; font-style: italic; margin: 12px 0; line-height: 1.4; background: #fff; }
     .appendix-footer-bar { font-size: 8pt; color: #374151; margin-bottom: 8px; padding: 6px 12px; background: #d9d9d9 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .task-instructions-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
+    .task-instructions-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 14pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; padding: 12px 16px; margin: 16px 0 0 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .task-questions-page { page-break-before: always; }
-    .task-questions-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 10pt; padding: 12px 16px; margin: 16px 0 0 0; }
-    .task-questions-instruction { background: #6b7280 !important; color: #fff !important; font-size: 9pt; padding: 8px 16px; margin: 0; }
-    .task-questions-instruction-label { font-size: 9pt; color: #1f2937; margin: 0 0 8px 0; padding: 0; background: transparent !important; }
-    .task-instructions-subheader { font-size: 9pt; color: #1f2937; margin: 0 0 8px 0; padding: 0; background: transparent !important; }
+    .task-questions-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 14pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; padding: 12px 16px; margin: 16px 0 0 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .task-questions-subheader { font-size: 10pt; color: #000; margin: 0 0 12px 0; padding: 0; background: transparent !important; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; }
+    .task-questions-instruction-label { font-size: 9pt; color: #000000; margin: 0 0 8px 0; padding: 0; background: transparent !important; }
+    .task-instructions-subheader { font-size: 9pt; color: #000000; margin: 0 0 8px 0; padding: 0; background: transparent !important; }
     .task-instructions-block { margin: 12px 0; }
     .task-instructions-block-title { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 9pt; padding: 8px 12px; }
     .task-instructions-block-content { padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; line-height: 1.5; }
@@ -326,14 +330,14 @@ function buildHtml(data: {
     .result-sheet-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: top; line-height: 1.35; }
     .result-sheet-table .result-label { width: 25%; background: #595959 !important; color: #ffffff; font-weight: 600; }
     .result-sheet-table .result-label.decl-office-label { background: #fae6d2 !important;color: #000000;}
-    .result-sheet-table .result-value { background: #fff !important; color: #1f2937; }
+    .result-sheet-table .result-value { background: #fff !important; color: #000000; }
     .result-sheet-table .answer-line { border: none; border-bottom: 1px solid #333; min-height: 18px; padding: 2px 4px; background: transparent; display: block; }
     .result-sheet-table .answer-line-inline { border: none; border-bottom: 1px solid #333; min-height: 14px; padding: 0 4px 2px; background: transparent; display: inline-block; min-width: 80px; }
     .result-sheet-table .answer-box { border: 1px solid #333; min-height: 24px; padding: 6px 8px; background: #e5e7eb; display: block; }
     .result-sheet-table .answer-box-large { min-height: 60px; background: #fff; }
     .result-sheet-table .result-radio { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; }
     .result-sheet-table .result-radio .radio-circle { width: 12px; height: 12px; border: 1.5px solid #374151; border-radius: 50%; flex-shrink: 0; }
-    .result-sheet-table .result-radio .radio-circle.filled { background: #1f2937; border-color: #1f2937; }
+    .result-sheet-table .result-radio .radio-circle.filled { background: #000000; border-color: #000000; }
     .assessment-summary-page { page-break-before: always; page-break-after: always; page-break-inside: avoid; }
     .assessment-summary-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 11pt; padding: 10px 12px; text-align: center; margin: 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .assessment-summary-intro { background: #fff !important; color: #374151 !important; font-size: 8.5pt; padding: 8px 12px; margin: 0; line-height: 1.4; border: 1px solid #000; border-top: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -341,24 +345,28 @@ function buildHtml(data: {
     .assessment-summary-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin: 0 0 8px 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .assessment-summary-table th, .assessment-summary-table td { border: 1px solid #000; padding: 5px 8px; vertical-align: top; line-height: 1.25; }
     .assessment-summary-table .summary-label { width: 25%; background: #595959 !important; color: #fff !important; font-weight: 600; }
-    .assessment-summary-table .summary-value { background: #fff !important; color: #1f2937; }
-    .assessment-summary-table .summary-attempt-value { background: #f3f4f6 !important; color: #1f2937; }
+    .assessment-summary-table .summary-value { background: #fff !important; color: #000000; }
+    .assessment-summary-table .summary-attempt-value { background: #f3f4f6 !important; color: #000000; }
     .assessment-summary-table .summary-result-header { background: #595959 !important; color: #fff !important; font-weight: bold; text-align: center; }
     .assessment-summary-table .summary-attempt-col { width: 25%; text-align: center; }
-    .assessment-summary-table .summary-label.summary-office { background: #fae6d2 !important; color: #1f2937 !important; }
-    .assessment-summary-table .summary-value.summary-office { background: #fae6d2 !important; color: #1f2937 !important; }
+    .assessment-summary-table .summary-label.summary-office { background: #fae6d2 !important; color: #000000 !important; }
+    .assessment-summary-table .summary-value.summary-office { background: #fae6d2 !important; color: #000000 !important; }
     .assessment-summary-table .summary-date-line { border: none; border-bottom: 1px solid #333; min-height: 12px; padding: 0 2px 1px; background: transparent; display: inline-block; min-width: 60px; font-size: 7pt; }
-    .assessment-summary-table .summary-cb { width: 12px; height: 12px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; color: #1f2937; background: #fff; }
-    .assessment-summary-table .summary-cb.checked { background: #1f2937; color: #fff; }
+    .assessment-summary-table .summary-cb { width: 12px; height: 12px; border: 1px solid #000; border-radius: 0; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; color: #000000; background: #fff; }
+    .assessment-summary-table .summary-cb.checked { background: #000000; color: #fff; }
     .decl-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 0 0 12px 0; border: 1px solid #000; border-left: 1px solid #000 !important; }
     .decl-table td { border: 1px solid #000; padding: 10px 12px; vertical-align: middle; line-height: 1.35; overflow: visible; }
     .decl-table td:first-child { border-left: 1px solid #000 !important; }
     .decl-table .decl-label { width: 35%; background: #d9d9d9; color: #000000;font-weight: bold; }
-    .decl-table .decl-value { background: #fff; color: #1f2937; }
+    .decl-table .decl-value { background: #fff; color: #000000; }
     .decl-table .decl-sig-value { color: #2563eb; font-style: italic; text-decoration: underline; }
     .decl-table .decl-other-header { background: #595959 !important; color: #fff !important; font-weight: bold; padding: 10px 12px; vertical-align: middle; }
     .decl-table .decl-office-label { font-style: italic; }
-    .decl-sig-heading { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #1f2937; }
+    .decl-sig-heading { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #000000; }
+    .decl-sig-inline-block { margin-bottom: 12px; }
+    .decl-sig-inline { margin: 10px 0; font-size: 11pt; }
+    .decl-sig-inline .decl-sig-label { font-weight: normal; margin-right: 8px; }
+    .decl-sig-inline .decl-sig-line { display: inline-block; border: none; border-bottom: 1px solid #000; min-width: 280px; min-height: 18px; background: transparent; vertical-align: bottom; padding: 0 2px 2px 0; }
     .assessment-summary-page .answer-box { min-height: 18px; padding: 4px 6px; font-size: 8pt; }
     .assessment-summary-page .answer-box.answer-box-large { min-height: 48px; }
     .answer-box { border: 1px solid #333; min-height: 24px; padding: 6px 8px; overflow: visible; background: #fff; }
@@ -380,28 +388,48 @@ function buildHtml(data: {
     .likert-section-row td { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 11pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; }
     /* Keep likert table and its comments box on same page */
     .likert-table-with-comments { page-break-inside: avoid; }
-    .likert-table tbody .likert-no { background: #e5e7eb !important; color: #1f2937; }
-    .likert-table tbody .likert-criteria { background: #e5e7eb !important; color: #1f2937; }
+    .likert-table tbody .likert-no { background: #e5e7eb !important; color: #000000; }
+    .likert-table tbody .likert-criteria { background: #e5e7eb !important; color: #000000; }
     .likert-table tbody .row-alt .likert-no { background: #f3f4f6 !important; }
     .likert-table tbody .row-alt .likert-criteria { background: #f3f4f6 !important; }
     .likert-radio { text-align: center; background: #fff !important; }
     .likert-table tbody .row-alt .likert-radio { background: #f9fafb !important; }
     .radio-circle { display: inline-block; width: 12px; height: 12px; border: 1.5px solid #4b5563; border-radius: 50%; }
-    .radio-circle.filled { background: #1f2937; border-color: #1f2937; }
+    .radio-circle.filled { background: #000000; border-color: #000000; }
     .signature-img { max-width: 150px; max-height: 60px; display: block; }
     .grid-table-no-border th, .grid-table-no-border td { border: 1px solid #000 !important; background: transparent !important; }
     .grid-table-no-border tbody tr { background: transparent !important; }
     .grid-table-no-border .label-cell, .grid-table-no-border .value-cell { background: transparent !important; }
-    .grid-table-no-border .sub-section-header { background: transparent !important; color: #1f2937 !important; border: 1px solid #000 !important; }
+    .grid-table-no-border .sub-section-header { background: transparent !important; color: #000000 !important; border: 1px solid #000 !important; }
+    .task-q-question-box { border: 1px solid #595959; margin-bottom: 20px; }
+    .task-q-question-box:last-child { margin-bottom: 0; }
+    .task-q-question-box .task-questions-table th,
+    .task-q-question-box .task-questions-table td,
+    .task-q-question-box .task-questions-table .task-q-inner-table th,
+    .task-q-question-box .task-questions-table .task-q-inner-table td { border-color: #595959 !important; }
+    .task-questions-table { border: none !important; margin: 0 !important; }
+    .task-questions-table .task-q-num-cell { background: #fff !important; border: 1px solid #595959 !important; padding: 12px !important; vertical-align: top !important; font-weight: bold; font-size: 11pt; width: 5%; }
+    .task-questions-table .task-q-question-cell { background: #fff !important; border: 1px solid #595959 !important; border-left: none !important; padding: 12px !important; vertical-align: top !important; }
+    .task-questions-table .task-q-question-label { font-weight: bold; font-size: 11pt; margin-bottom: 8px; color: #000; }
+    .task-questions-table .task-q-satisfactory-cell { background: #fff !important; border: 1px solid #595959 !important; border-left: none !important; padding: 12px !important; vertical-align: top !important; text-align: right; width: 25%; }
+    .task-questions-table .task-q-satisfactory-header { font-weight: bold; font-size: 10pt; margin-bottom: 6px; }
+    .task-questions-table .task-q-satisfactory-cell .task-q-radio-group { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 16px; }
+    .task-questions-table .task-q-radio { display: inline-flex; align-items: center; gap: 6px; }
+    .task-questions-table .task-q-radio .radio-circle { width: 12px; height: 12px; border: 1.5px solid #374151; border-radius: 50%; flex-shrink: 0; }
+    .task-questions-table .task-q-radio .radio-circle.filled { background: #000; border-color: #000; }
+    .task-q-answer-block { padding: 12px; min-height: 24px; font-size: 11pt; background: #fff; }
+    .task-q-answer-block.task-q-answer-large { min-height: 80px; }
+    .task-questions-table .task-q-inner-table th, .task-questions-table .task-q-inner-table td,
+    .task-questions-table .task-q-inner-table .label-cell, .task-questions-table .task-q-inner-table .value-cell { background: #fff !important; border: 1px solid #595959 !important; }
     .task-questions-table .label-cell, .task-questions-table .value-cell, .task-questions-table td { background: #fff !important; }
     .step-page { page-break-after: always; }
     .section-table, .likert-table, .assessment-tasks-table { page-break-inside: auto; }
     .decl-table, .result-sheet-table, .assessment-summary-table { page-break-inside: avoid; }
     .step-page:first-child { padding-top: 20px; }
     .step-page:not(:first-child) { padding-top: 24px; }
-    .intro-page h2.intro-title { font-size: 18pt; font-weight: bold; margin: 0 0 16px 0; color: #1f2937; border-left: none; padding-left: 0; }
-    .intro-page h3 { font-size: 12pt; font-weight: bold; margin: 16px 0 8px 0; color: #1f2937; }
-    .intro-page h4 { font-size: 10pt; font-weight: bold; margin: 12px 0 6px 0; color: #1f2937; }
+    .intro-page h2.intro-title { color: #595959; font-size: 24pt; font-weight: bold; font-family:'Calibri','Calibri Light',Arial,sans-serif; margin: 0 0 16px 0; border-left: none; padding-left: 0; }
+    .intro-page h3 { color: #595959; font-weight: normal; font-size: 24pt; font-family:'Calibri','Calibri Light',Arial,sans-serif; margin: 16px 0 8px 0; }
+    .intro-page h4 { font-weight: bold;font-size: 11pt;font-family:'Calibri','Calibri Light',Arial,sans-serif; margin: 12px 0 6px 0; color: #000000; }
     .intro-page p { margin: 0 0 12px 0; line-height: 1.5; }
     .intro-page ul { margin: 0 0 12px 0; padding-left: 20px; }
     .intro-page li { margin-bottom: 6px; line-height: 1.5; }
@@ -596,7 +624,7 @@ function buildHtml(data: {
       <div style="position:absolute;left:15mm;right:15mm;top:110px;border-top:1px solid #8b95a5;z-index:0;"></div>
       <div style="position:absolute;left:15mm;top:0px;z-index:1;">${crestImg ? `<img src="${crestImg}" alt="Skyline Institute of Technology" style="width:210px;height:165px;object-fit:contain;display:block;" />` : ''}</div>
       <div style="position:absolute;left:50%;top:18px;transform:translateX(-50%);z-index:1;">${textImg ? `<img src="${textImg}" alt="SKYLINE INSTITUTE OF TECHNOLOGY" style="height:100px;width:auto;object-fit:contain;display:block;" />` : '<div style="display:flex;flex-direction:column;align-items:center;"><span style="font-size:22pt;font-weight:700;color:#f97316;letter-spacing:2px;">SKYLINE</span><span style="font-size:9pt;font-weight:600;color:#374151;letter-spacing:2px;margin-top:2px;">INSTITUTE OF TECHNOLOGY</span></div>'}</div>
-      <div style="position:absolute;right:15mm;top:8px;width:260px;font-size:11pt;color:#374151;text-align:right;line-height:1.25;font-weight:300;z-index:1;">
+      <div style="position:absolute;right:15mm;top:8px;width:260px;font-size:11pt;font-family:'Calibri','Calibri Light',Arial,sans-serif;color:#374151;text-align:right;line-height:1.25;font-weight:300;z-index:1;">
         Level 8, 310 King Street<br/>Melbourne VIC – 3000<br/>RTO: 45989 CRICOS: 04114B<br/>Email: <a href="mailto:info@slit.edu.au" style="color:#2563eb;text-decoration:underline;">info@slit.edu.au</a><br/>Phone: +61 3 9125 1661
       </div>
     </div>
@@ -686,13 +714,11 @@ function buildHtml(data: {
         html += '<p style="margin:0 0 10px 0;line-height:1.4;font-size:11pt">Your honest and detailed input is therefore of great value to us, and we appreciate your assistance in completing this evaluation form!</p>';
         learnerEvalIntroShown = true;
       }
+      /* Only increment headerNum when we output a visible numbered section. Reasonable Adjustment (Appendix A) has no number; inline Reasonable Adjustment handles its own increment below. */
       if (section.pdf_render_mode !== 'declarations' && section.pdf_render_mode !== 'reasonable_adjustment' && section.pdf_render_mode !== 'task_instructions' && section.pdf_render_mode !== 'task_results' && section.pdf_render_mode !== 'task_questions' && section.pdf_render_mode !== 'assessment_summary' && section.title !== 'Assessment Summary Sheet' && !isLearnerEvaluation) {
         html += `<h3>${headerNum}. ${section.title}</h3>`;
         headerNum++;
         if (section.description) html += `<p>${section.description}</p>`;
-      }
-      if (section.pdf_render_mode === 'reasonable_adjustment') {
-        headerNum++;
       }
 
       if (isLearnerEvaluation && section.title === 'Participant Information') {
@@ -894,18 +920,29 @@ function buildHtml(data: {
           }
         }
       } else if (section.pdf_render_mode === 'task_questions') {
+        const rowId = (section as { assessment_task_row_id?: number | null }).assessment_task_row_id;
+        const row = rowId ? taskRowsMap.get(rowId) : null;
+        const instr = row?.row_meta?.instructions as Record<string, string> | undefined;
+        const assessmentType = instr?.assessment_type ? String(instr.assessment_type).replace(/<[^>]*>/g, '').trim() || (row?.row_help || 'Assessment') : (row?.row_help || 'Assessment');
+        const taskHeaderTitle = `${row?.row_label || section.title} – ${assessmentType}`;
         html += '<div class="task-questions-page">';
-        html += `<div class="task-questions-instruction-label">Provide your response to each question in the box below.</div>`;
+        html += `<div class="task-questions-header">${taskHeaderTitle}</div>`;
+        html += `<div class="task-questions-subheader">Provide your response to each question in the box below.</div>`;
         headerNum++;
         const normalQs = questions.filter((q) => q.question.type !== 'instruction_block' && q.question.type !== 'page_break');
-        html += '<table class="section-table task-questions-table"><thead><tr><th class="sub-section-header" style="width:75%">Question</th><th class="sub-section-header" style="width:25%;text-align:center">Satisfactory response</th></tr></thead><tbody>';
-        for (const { question, rows } of normalQs) {
+        for (let qIdx = 0; qIdx < normalQs.length; qIdx++) {
+          const { question, rows } = normalQs[qIdx];
           const sat = trainerAssessments.get(question.id);
           const satYes = sat === 'yes';
           const satNo = sat === 'no';
-          html += '<tr><td class="value-cell" style="vertical-align:top">';
-          html += `<div class="question-label" style="margin-bottom:8px;font-weight:bold">${question.label}</div>`;
-          if (question.type === 'grid_table' && rows.length > 0) {
+          const isGridTable = question.type === 'grid_table' && rows.length > 0;
+          html += '<div class="task-q-question-box">';
+          html += '<table class="section-table task-questions-table"><tbody>';
+          html += '<tr class="task-q-question-row">';
+          html += `<td class="task-q-num-cell">Q${qIdx + 1}:</td>`;
+          html += '<td class="task-q-question-cell">';
+          html += `<div class="task-q-question-label">${question.label}</div>`;
+          if (isGridTable) {
             const pm = (question.pdf_meta as Record<string, unknown>) || {};
             const cols = (Array.isArray(pm.columns) ? pm.columns : ['Column 1', 'Column 2']) as string[];
             const layout = (pm.layout as string) || 'default';
@@ -913,15 +950,15 @@ function buildHtml(data: {
             const isNoImage = layout === 'no_image';
             const firstCol = (pm.firstColumnLabel as string) || (isNoImage ? 'Item' : 'Name');
             const secondCol = (pm.secondColumnLabel as string) || (isNoImage ? 'Description' : 'Image');
-            html += '<table class="section-table grid-table-no-border"><thead><tr>';
+            html += '<table class="section-table grid-table-no-border task-q-inner-table"><thead><tr>';
             if (isSplit) {
-              html += `<th class="sub-section-header">${secondCol}</th>`;
+              html += `<th>${secondCol}</th>`;
             } else if (isNoImage) {
-              html += `<th class="sub-section-header">${firstCol}</th><th class="sub-section-header">${secondCol}</th>`;
+              html += `<th>${firstCol}</th><th>${secondCol}</th>`;
             } else {
-              html += '<th class="sub-section-header">Shape</th>';
+              html += '<th>Shape</th>';
             }
-            for (const c of cols) html += `<th class="sub-section-header">${c}</th>`;
+            for (const c of cols) html += `<th>${c}</th>`;
             html += '</tr></thead><tbody>';
             for (const row of rows) {
               const key = `q-${question.id}-${row.id}`;
@@ -944,18 +981,22 @@ function buildHtml(data: {
               html += '</tr>';
             }
             html += '</tbody></table>';
-          } else {
+          }
+          html += '</td>';
+          html += '<td class="task-q-satisfactory-cell">';
+          html += '<div class="task-q-satisfactory-header">Satisfactory response</div>';
+          html += '<div class="task-q-radio-group"><div class="task-q-radio"><span class="radio-circle' + (satYes ? ' filled' : '') + '"></span>Yes</div>';
+          html += '<div class="task-q-radio"><span class="radio-circle' + (satNo ? ' filled' : '') + '"></span>No</div></div>';
+          html += '</td></tr>';
+          html += '</tbody></table>';
+          if (!isGridTable) {
             const key = rows[0] ? `q-${question.id}-${rows[0].id}` : `q-${question.id}`;
             const val = answers.get(key);
-            const boxClass = question.type === 'long_text' ? 'answer-box answer-box-large' : 'answer-box';
-            html += `<div class="question"><div class="${boxClass}">${val ?? ''}</div></div>`;
+            const blockClass = question.type === 'long_text' ? 'task-q-answer-block task-q-answer-large' : 'task-q-answer-block';
+            html += `<div class="${blockClass}">${val ?? ''}</div>`;
           }
-          html += '</td><td class="label-cell" style="vertical-align:top;text-align:center;width:25%">';
-          html += '<div class="declaration-checkbox" style="margin:4px 0"><span class="cb' + (satYes ? ' checked' : '') + '">' + (satYes ? '✓' : '') + '</span><span class="question-label">Yes</span></div>';
-          html += '<div class="declaration-checkbox" style="margin:4px 0"><span class="cb' + (satNo ? ' checked' : '') + '">' + (satNo ? '✓' : '') + '</span><span class="question-label">No</span></div>';
-          html += '</td></tr>';
+          html += '</div>';
         }
-        html += '</tbody></table>';
         html += '</div>'; // Close task-questions-page wrapper
       } else if (section.pdf_render_mode === 'task_results') {
         const rowId = section.assessment_task_row_id;
@@ -1174,6 +1215,8 @@ function buildHtml(data: {
           }
           html += '</div>';
         } else if (sectionTitle.includes('signature')) {
+          html += `<div class="decl-heading-bar">${headerNum}. ${section.title}</div>`;
+          headerNum++;
           for (const { question } of questions) {
             if (question.type === 'signature') {
               const code = question.code || '';
@@ -1193,15 +1236,23 @@ function buildHtml(data: {
                 sigVal = val;
                 nameVal = String(codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
               }
-              const sigDisplay = sigVal
-                ? `<img src="${sigVal}" class="signature-img" alt="Signature" />`
-                : `<span class="decl-sig-value">${nameVal || '-'}</span>`;
-              html += `<div class="decl-sig-heading">${question.label}</div>`;
-              html += '<table class="decl-table"><tbody>';
-              if (showName) html += `<tr><td class="decl-label">${code.startsWith('student') ? 'Student Name' : 'Trainer/Assessor Name'}</td><td class="decl-value">${nameVal || ''}</td></tr>`;
-              html += `<tr><td class="decl-label">${question.label}</td><td class="decl-value">${sigDisplay}</td></tr>`;
-              if (showDate) html += `<tr><td class="decl-label">Date</td><td class="decl-value">${dateVal || ''}</td></tr>`;
-              html += '</tbody></table>';
+              const isStudent = code.startsWith('student');
+              if (isStudent) {
+                html += '<div class="decl-sig-inline-block">';
+                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : `<span class="decl-sig-line"></span>`}</div>`;
+                if (showDate) html += `<div class="decl-sig-inline"><span class="decl-sig-label">Date:</span><span class="decl-sig-line">${dateVal || ''}</span></div>`;
+                html += '</div>';
+              } else {
+                const sigDisplay = sigVal
+                  ? `<img src="${sigVal}" class="signature-img" alt="Signature" />`
+                  : `<span class="decl-sig-value">${nameVal || '-'}</span>`;
+                html += `<div class="decl-sig-heading">${question.label}</div>`;
+                html += '<table class="decl-table"><tbody>';
+                if (showName) html += `<tr><td class="decl-label">Trainer/Assessor Name</td><td class="decl-value">${nameVal || ''}</td></tr>`;
+                html += `<tr><td class="decl-label">${question.label}</td><td class="decl-value">${sigDisplay}</td></tr>`;
+                if (showDate) html += `<tr><td class="decl-label">Date</td><td class="decl-value">${dateVal || ''}</td></tr>`;
+                html += '</tbody></table>';
+              }
             }
           }
         } else if (sectionTitle.includes('office')) {
@@ -1217,10 +1268,12 @@ function buildHtml(data: {
           }
           html += '</tbody></table>';
         } else {
+          const hasStudentSig = questions.some((q) => q.question.type === 'signature' && (q.question.code || '').startsWith('student'));
+          const declSectionClass = hasStudentSig ? 'declarations-section declarations-section-no-border' : 'declarations-section';
           html += `<h3>${headerNum}. ${section.title}</h3>`;
           headerNum++;
           if (section.description) html += `<p class="intro-page" style="margin: 0 0 12px 0; line-height: 1.5;">${(section.description || '').replace(/\n/g, '<br/>')}</p>`;
-          html += '<div class="declarations-section">';
+          html += `<div class="${declSectionClass}">`;
           for (const { question } of questions) {
             if (question.type === 'signature') {
               const code = question.code || '';
@@ -1240,15 +1293,23 @@ function buildHtml(data: {
                 sigVal = val;
                 nameVal = String(codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
               }
-              const sigDisplay = sigVal
-                ? `<img src="${sigVal}" class="signature-img" alt="Signature" />`
-                : `<span class="decl-sig-value">${nameVal || '-'}</span>`;
-              html += `<div class="decl-sig-heading">${question.label}</div>`;
-              html += '<table class="decl-table"><tbody>';
-              if (showName) html += `<tr><td class="decl-label">${code.startsWith('student') ? 'Student Name' : 'Trainer/Assessor Name'}</td><td class="decl-value">${nameVal || ''}</td></tr>`;
-              html += `<tr><td class="decl-label">${question.label}</td><td class="decl-value">${sigDisplay}</td></tr>`;
-              if (showDate) html += `<tr><td class="decl-label">Date</td><td class="decl-value">${dateVal || ''}</td></tr>`;
-              html += '</tbody></table>';
+              const isStudent = code.startsWith('student');
+              if (isStudent) {
+                html += '<div class="decl-sig-inline-block">';
+                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : `<span class="decl-sig-line"></span>`}</div>`;
+                if (showDate) html += `<div class="decl-sig-inline"><span class="decl-sig-label">Date:</span><span class="decl-sig-line">${dateVal || ''}</span></div>`;
+                html += '</div>';
+              } else {
+                const sigDisplay = sigVal
+                  ? `<img src="${sigVal}" class="signature-img" alt="Signature" />`
+                  : `<span class="decl-sig-value">${nameVal || '-'}</span>`;
+                html += `<div class="decl-sig-heading">${question.label}</div>`;
+                html += '<table class="decl-table"><tbody>';
+                if (showName) html += `<tr><td class="decl-label">Trainer/Assessor Name</td><td class="decl-value">${nameVal || ''}</td></tr>`;
+                html += `<tr><td class="decl-label">${question.label}</td><td class="decl-value">${sigDisplay}</td></tr>`;
+                if (showDate) html += `<tr><td class="decl-label">Date</td><td class="decl-value">${dateVal || ''}</td></tr>`;
+                html += '</tbody></table>';
+              }
             } else if (question.type === 'date') {
               const val = answers.get(`q-${question.id}`);
               html += `<div class="question"><div class="question-label">${question.label}</div><div class="answer-box">${val ?? ''}</div></div>`;
@@ -1395,7 +1456,7 @@ app.get('/pdf/:instanceId', async (req, res) => {
         .from('skyline_form_assessment_summary_data')
         .select('*')
         .eq('instance_id', instanceId)
-        .single();
+        .maybeSingle();
       if (sumRow) {
         const r = sumRow as Record<string, unknown>;
         assessmentSummaryMap = {

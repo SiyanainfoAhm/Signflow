@@ -233,7 +233,7 @@ export const InstanceFillPage: React.FC = () => {
 
       <div className="w-full px-4 md:px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-8 space-y-6 overflow-y-auto max-h-[calc(100vh-8rem)] pr-2">
+          <div className="lg:col-span-9 space-y-6 overflow-y-auto max-h-[calc(100vh-8rem)] pr-2">
             <Card>
               <Stepper steps={steps} currentStep={currentStep} />
             </Card>
@@ -491,14 +491,14 @@ export const InstanceFillPage: React.FC = () => {
                           <div className="bg-[#6b7280] text-white text-sm px-4 py-2">
                             Provide your response to each question in the box below.
                           </div>
-                          <div className="overflow-x-auto max-w-3xl">
+                          <div className="w-full overflow-x-auto">
                             <table className="w-full border-collapse text-sm table-fixed">
                               <thead>
                                 <tr>
-                                  <th className="bg-gray-200 font-semibold text-gray-700 p-3 border border-gray-300 text-left align-top" style={{ width: 'calc(100% - 7.5rem)' }}>
+                                  <th className="bg-gray-200 font-semibold text-gray-700 p-3 border border-gray-300 text-left align-top" style={{ width: 'calc(100% - 9rem)' }}>
                                     Question
                                   </th>
-                                  <th className="bg-gray-200 font-semibold text-gray-700 p-2 border border-gray-300 text-center align-top whitespace-nowrap" style={{ width: '7.5rem' }}>
+                                  <th className="bg-gray-200 font-semibold text-gray-700 p-2 border border-gray-300 text-center align-top break-words" style={{ width: '9rem', minWidth: 0 }}>
                                     Satisfactory response
                                   </th>
                                 </tr>
@@ -559,7 +559,7 @@ export const InstanceFillPage: React.FC = () => {
                                             />
                                           )}
                                         </td>
-                                        <td className="p-2 border border-gray-300 align-top" style={{ width: '7.5rem' }}>
+                                        <td className="p-2 border border-gray-300 align-top" style={{ width: '9.5rem' }}>
                                           <div className="flex flex-row items-center justify-center gap-3">
                                             <label className="flex items-center gap-1.5 cursor-pointer">
                                               <input
@@ -1106,8 +1106,8 @@ export const InstanceFillPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="lg:col-span-4">
-            <div className="lg:sticky lg:top-4">
+          <div className="lg:col-span-3">
+            <div className="lg:sticky lg:top-3">
               <Card>
                 <h3 className="font-bold text-[var(--text)] mb-4">PDF Preview</h3>
                 <div className="space-y-2">

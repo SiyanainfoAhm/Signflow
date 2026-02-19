@@ -391,7 +391,7 @@ export async function fetchAssessmentSummaryData(instanceId: number): Promise<As
     .from('skyline_form_assessment_summary_data')
     .select('*')
     .eq('instance_id', instanceId)
-    .single();
+    .maybeSingle();
   if (error || !data) return null;
   const r = data as Record<string, unknown>;
   return {

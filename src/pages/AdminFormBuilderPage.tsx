@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Eye, GripVertical, Trash2, ImagePlus } from 'lucide-react';
 import {
   DndContext,
@@ -33,6 +33,8 @@ import { Checkbox } from '../components/ui/Checkbox';
 import { TaskInstructionsModal, type TaskInstructionsData } from '../components/form-fill/TaskInstructionsModal';
 import { SectionInstructionsEditor } from '../components/form-fill/SectionInstructionsEditor';
 import { cn } from '../components/utils/cn';
+
+const FLUSH_PENDING_EVENT = 'form-builder:flush-pending';
 
 const QUESTION_TYPES = [
   { value: 'instruction_block', label: 'Instruction Block' },
@@ -75,7 +77,6 @@ const PREBUILT_SECTION_TITLES = [
   'Assessment appeals process',
   'Recognised prior learning',
   'Special needs',
-  'For more information',
 ];
 
 function isPrebuiltSection(title: string): boolean {
@@ -376,6 +377,7 @@ export const AdminFormBuilderPage: React.FC = () => {
   const coverInputRef = React.useRef<HTMLInputElement>(null);
   const questionPendingUpdates = useRef<Record<number, Partial<FormQuestion>>>({});
   const questionSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const questionBlurSavePromise = useRef<Promise<void> | null>(null);
   const QUESTION_SAVE_DEBOUNCE_MS = 450;
 
   const assessmentTasksGridQuestionId = useMemo(() => {
@@ -482,6 +484,21 @@ export const AdminFormBuilderPage: React.FC = () => {
       questionSaveTimers.current = {};
       questionPendingUpdates.current = {};
     };
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      Object.keys(questionSaveTimers.current).forEach((id) => {
+        clearTimeout(questionSaveTimers.current[Number(id)]);
+        const pending = questionPendingUpdates.current[Number(id)];
+        if (pending && Object.keys(pending).length > 0) {
+          supabase.from('skyline_form_questions').update(pending).eq('id', Number(id));
+        }
+      });
+      window.dispatchEvent(new CustomEvent(FLUSH_PENDING_EVENT, { detail: { addPromises: () => {} } }));
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
   }, []);
 
   const selectedStep = steps.find((s) => s.id === selectedStepId);
@@ -712,15 +729,44 @@ export const AdminFormBuilderPage: React.FC = () => {
     }
   };
 
-  const flushQuestionSave = useCallback((questionId: number) => {
+  const flushQuestionSave = useCallback((questionId: number): Promise<void> => {
     const pending = questionPendingUpdates.current[questionId];
     delete questionPendingUpdates.current[questionId];
     const t = questionSaveTimers.current[questionId];
     if (t) clearTimeout(t);
     delete questionSaveTimers.current[questionId];
     if (pending && Object.keys(pending).length > 0) {
-      supabase.from('skyline_form_questions').update(pending).eq('id', questionId);
+      return Promise.resolve(supabase.from('skyline_form_questions').update(pending).eq('id', questionId)).then(() => {});
     }
+    return Promise.resolve();
+  }, []);
+
+  /** Flush all debounced saves (questions, options, rows) before preview or navigation. */
+  const flushAllPendingSaves = useCallback(async () => {
+    if (questionBlurSavePromise.current) {
+      await questionBlurSavePromise.current;
+      questionBlurSavePromise.current = null;
+    }
+    const timerIds = Object.keys(questionSaveTimers.current).map(Number);
+    const pendingIds = Object.keys(questionPendingUpdates.current).map(Number);
+    const allIds = [...new Set([...timerIds, ...pendingIds])];
+    allIds.forEach((id) => {
+      clearTimeout(questionSaveTimers.current[id]);
+      delete questionSaveTimers.current[id];
+    });
+    const promises: Promise<unknown>[] = [];
+    for (const id of allIds) {
+      const pending = questionPendingUpdates.current[id];
+      delete questionPendingUpdates.current[id];
+      if (pending && Object.keys(pending).length > 0) {
+        promises.push(Promise.resolve(supabase.from('skyline_form_questions').update(pending).eq('id', id)));
+      }
+    }
+    const childPromises: Promise<unknown>[] = [];
+    window.dispatchEvent(
+      new CustomEvent(FLUSH_PENDING_EVENT, { detail: { addPromises: (ps: Promise<unknown>[]) => childPromises.push(...ps) } })
+    );
+    await Promise.all([...promises, ...childPromises]);
   }, []);
 
   const updateQuestion = useCallback((questionId: number, updates: Partial<FormQuestion>) => {
@@ -755,9 +801,18 @@ export const AdminFormBuilderPage: React.FC = () => {
       <header className="bg-white border-b border-[var(--border)] shadow-sm sticky top-0 z-20">
         <div className="w-full px-4 md:px-6 py-4 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-4">
-            <Link to="/admin/forms" className="text-gray-600 hover:text-gray-900">
+            <button
+              type="button"
+              onClick={async (e) => {
+                e.preventDefault();
+                await new Promise((r) => setTimeout(r, 0));
+                await flushAllPendingSaves();
+                navigate('/admin/forms');
+              }}
+              className="text-gray-600 hover:text-gray-900 bg-transparent border-none cursor-pointer font-inherit p-0"
+            >
               ← Back
-            </Link>
+            </button>
             <h1 className="text-xl font-bold text-[var(--text)]">{form.name}</h1>
           </div>
           <div className="flex items-center gap-3">
@@ -795,9 +850,14 @@ export const AdminFormBuilderPage: React.FC = () => {
             size="sm"
             onClick={async () => {
               setPreviewing(true);
-              const instance = await createFormInstance(Number(formId), 'student');
-              setPreviewing(false);
-              if (instance) navigate(`/instances/${instance.id}`);
+              try {
+                await new Promise((r) => setTimeout(r, 0));
+                await flushAllPendingSaves();
+                const instance = await createFormInstance(Number(formId), 'student');
+                if (instance) navigate(`/instances/${instance.id}`);
+              } finally {
+                setPreviewing(false);
+              }
             }}
             disabled={previewing}
           >
@@ -963,11 +1023,13 @@ export const AdminFormBuilderPage: React.FC = () => {
                       label="Label"
                       value={q.label}
                       onChange={(e) => updateQuestion(q.id, { label: e.target.value })}
+                      onBlur={() => { questionBlurSavePromise.current = flushQuestionSave(q.id); }}
                     />
                     <Textarea
                       label="Help Text"
                       value={q.help_text || ''}
                       onChange={(e) => updateQuestion(q.id, { help_text: e.target.value })}
+                      onBlur={() => { questionBlurSavePromise.current = flushQuestionSave(q.id); }}
                     />
                     <div className="flex items-center gap-2">
                       <Checkbox
@@ -1194,6 +1256,27 @@ function QuestionOptionsEditor({ questionId }: { questionId: number }) {
     };
   }, []);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ addPromises: (ps: Promise<unknown>[]) => void }>).detail;
+      const promises: Promise<unknown>[] = [];
+      Object.keys(optionSaveTimers.current).forEach((id) => {
+        clearTimeout(optionSaveTimers.current[Number(id)]);
+        delete optionSaveTimers.current[Number(id)];
+      });
+      Object.keys(optionPendingUpdates.current).forEach((id) => {
+        const pending = optionPendingUpdates.current[Number(id)];
+        delete optionPendingUpdates.current[Number(id)];
+        if (pending && Object.keys(pending).length > 0) {
+          promises.push(Promise.resolve(supabase.from('skyline_form_question_options').update(pending).eq('id', Number(id))));
+        }
+      });
+      if (promises.length > 0) detail.addPromises(promises);
+    };
+    window.addEventListener(FLUSH_PENDING_EVENT, handler);
+    return () => window.removeEventListener(FLUSH_PENDING_EVENT, handler);
+  }, []);
+
   const addOption = async () => {
     const { data } = await supabase
       .from('skyline_form_question_options')
@@ -1289,6 +1372,27 @@ function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onSteps
       rowSaveTimers.current = {};
       rowPendingUpdates.current = {};
     };
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ addPromises: (ps: Promise<unknown>[]) => void }>).detail;
+      const promises: Promise<unknown>[] = [];
+      Object.keys(rowSaveTimers.current).forEach((id) => {
+        clearTimeout(rowSaveTimers.current[Number(id)]);
+        delete rowSaveTimers.current[Number(id)];
+      });
+      Object.keys(rowPendingUpdates.current).forEach((id) => {
+        const pending = rowPendingUpdates.current[Number(id)];
+        delete rowPendingUpdates.current[Number(id)];
+        if (pending && Object.keys(pending).length > 0) {
+          promises.push(Promise.resolve(supabase.from('skyline_form_question_rows').update(pending).eq('id', Number(id))));
+        }
+      });
+      if (promises.length > 0) detail.addPromises(promises);
+    };
+    window.addEventListener(FLUSH_PENDING_EVENT, handler);
+    return () => window.removeEventListener(FLUSH_PENDING_EVENT, handler);
   }, []);
 
   const addRow = async () => {
