@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install deps and build
 COPY package*.json tsconfig.json ./
 COPY index.ts htmlGenerator.ts ./
+COPY public/ ./public/
 RUN npm ci && npm run build
 
 EXPOSE 3001

@@ -207,28 +207,31 @@ function buildHtml(data: {
   // Header images: crest (shield logo) and text logo
   let crestImg = form.header_asset_url || '';
   let textImg = '';
+  const resolveLogoPath = (filename: string) => {
+    const dirs = [
+      path.join(__dirname, 'public'),           // pdf-server/public (for standalone deploy)
+      path.join(__dirname, '..', 'public'),     // project root public (for local/monorepo)
+    ];
+    for (const dir of dirs) {
+      const p = path.join(dir, filename);
+      if (fs.existsSync(p)) return p;
+    }
+    return null;
+  };
   try {
     if (!crestImg) {
-      const crestPath = path.join(__dirname, '..', 'public', 'logo-crest.png');
-      if (fs.existsSync(crestPath)) {
+      const crestPath = resolveLogoPath('logo-crest.png') ?? resolveLogoPath('logo.png') ?? resolveLogoPath('logo.jpeg') ?? resolveLogoPath('logo.jpg');
+      if (crestPath) {
         const buf = fs.readFileSync(crestPath);
-        crestImg = `data:image/png;base64,${buf.toString('base64')}`;
+        const mime = crestPath.endsWith('.png') ? 'png' : 'jpeg';
+        crestImg = `data:image/${mime};base64,${buf.toString('base64')}`;
       } else {
-        let logoPath = path.join(__dirname, '..', 'public', 'logo.jpeg');
-        let mime = 'jpeg';
-        if (!fs.existsSync(logoPath)) logoPath = path.join(__dirname, '..', 'public', 'logo.jpg');
-        if (!fs.existsSync(logoPath)) {
-          logoPath = path.join(__dirname, '..', 'public', 'logo.png');
-          mime = 'png';
-        }
-        if (fs.existsSync(logoPath)) {
-          const logoBuf = fs.readFileSync(logoPath);
-          crestImg = `data:image/${mime};base64,${logoBuf.toString('base64')}`;
-        }
+        // Fallback: minimal SVG logo when no image files (e.g. on Render/Railway deploy)
+        crestImg = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100"><text x="10" y="55" font-family="Arial,sans-serif" font-size="28" font-weight="bold" fill="#f97316">SKYLINE</text></svg>')}`;
       }
     }
-    const textPath = path.join(__dirname, '..', 'public', 'logo-text.png');
-    if (fs.existsSync(textPath)) {
+    const textPath = resolveLogoPath('logo-text.png');
+    if (textPath) {
       const buf = fs.readFileSync(textPath);
       textImg = `data:image/png;base64,${buf.toString('base64')}`;
     }

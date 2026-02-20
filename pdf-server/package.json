@@ -6,6 +6,7 @@
     "dev": "tsx watch index.ts",
     "build": "tsc && npx playwright install chromium",
     "postinstall": "npx playwright install chromium",
+    "prestart": "node -e \"const fs=require('fs');const path=require('path');const src=path.join(process.cwd(),'..','public');const dest=path.join(process.cwd(),'public');if(fs.existsSync(src)){fs.mkdirSync(dest,{recursive:true});['logo-crest.png','logo-text.png','logo.png','logo.jpg','logo.jpeg'].forEach(f=>{const s=path.join(src,f);if(fs.existsSync(s))fs.copyFileSync(s,path.join(dest,f));});}\"",
     "start": "tsx index.ts"
   },
   "dependencies": {

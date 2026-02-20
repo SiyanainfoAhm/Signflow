@@ -81,6 +81,14 @@ The app has two parts:
 - **Frontend** (React/Vite) → Deploy to Vercel
 - **PDF server** (Node + Playwright) → Deploy separately (Railway, Render, etc.)
 
+### PDF logos
+
+For crest/logo images in PDFs, add these to `public/` (project root) or `pdf-server/public/`:
+- `logo-crest.png` or `logo.png` / `logo.jpeg` / `logo.jpg`
+- `logo-text.png`
+
+If missing, a minimal text fallback is used. The deploy copies from `public/` into `pdf-server/public/` when available.
+
 ### Deploy PDF Server (required for PDF preview/download in production)
 
 #### Option A: Railway
