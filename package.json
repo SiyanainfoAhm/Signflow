@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "start": "cd pdf-server && npm install && npm start",
     "convert-logo": "node scripts/convert-logo-to-base64.js",
     "seed": "tsx scripts/seed-forms.ts"
   },

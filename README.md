@@ -88,10 +88,11 @@ The app has two parts:
 1. Create a [Railway](https://railway.app/) account and connect your GitHub repo.
 2. Add a **new service** → **Deploy from GitHub repo** → Select SignFlow.
 3. Configure the service:
-   - **Root Directory**: `pdf-server`
-   - **Build Command**: (leave empty – Docker builds automatically)
-   - **Start Command**: (leave empty – Dockerfile defines it)
-   - **Dockerfile Path**: `Dockerfile` (in pdf-server folder)
+   - **Root Directory**: Leave empty (repo root)
+   - **Build Command**: `cd pdf-server && npm install`
+   - **Start Command**: `npm start`
+
+   Or use Docker: set **Root Directory** to `pdf-server` and ensure **Dockerfile** is used.
 
 4. Add environment variables in Railway → Variables:
    - `SUPABASE_URL` – Your Supabase project URL
@@ -103,10 +104,13 @@ The app has two parts:
 
 1. Create a [Render](https://render.com/) account and connect your repo.
 2. New → **Web Service** → Connect your SignFlow repo.
-3. Configure:
-   - **Root Directory**: `pdf-server`
-   - **Environment**: Docker
-   - **Docker Command**: (leave default – uses Dockerfile)
+3. Configure (if Root Directory doesn't work, use repo root with custom commands):
+   - **Root Directory**: Leave empty
+   - **Build Command**: `cd pdf-server && npm install`
+   - **Start Command**: `npm start`
+   - **Environment**: Node
+
+   Or use Docker: set **Root Directory** to `pdf-server` and **Environment** to Docker.
 
 4. Add environment variables:
    - `SUPABASE_URL` – Your Supabase project URL

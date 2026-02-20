@@ -1,0 +1,12 @@
+# Render Blueprint - PDF Server
+# Deploy: New → Blueprint → Connect repo → select this file
+services:
+  - type: web
+    name: signflow-pdf
+    rootDir: pdf-server
+    env: docker
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
