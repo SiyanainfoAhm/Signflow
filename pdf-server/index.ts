@@ -24,6 +24,12 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Allow cross-origin requests (frontend may be on different domain, e.g. Vercel)
+app.use((_req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
+
 interface FormAnswer {
   question_id: number;
   row_id: number | null;

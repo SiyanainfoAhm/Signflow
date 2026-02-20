@@ -75,6 +75,52 @@ npm run build
 npm run preview
 ```
 
+## Deployment
+
+The app has two parts:
+- **Frontend** (React/Vite) → Deploy to Vercel
+- **PDF server** (Node + Playwright) → Deploy separately (Railway, Render, etc.)
+
+### Deploy PDF Server (required for PDF preview/download in production)
+
+#### Option A: Railway
+
+1. Create a [Railway](https://railway.app/) account and connect your GitHub repo.
+2. Add a **new service** → **Deploy from GitHub repo** → Select SignFlow.
+3. Configure the service:
+   - **Root Directory**: `pdf-server`
+   - **Build Command**: (leave empty – Docker builds automatically)
+   - **Start Command**: (leave empty – Dockerfile defines it)
+   - **Dockerfile Path**: `Dockerfile` (in pdf-server folder)
+
+4. Add environment variables in Railway → Variables:
+   - `SUPABASE_URL` – Your Supabase project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` – Supabase service role key
+
+5. Deploy. Railway will assign a URL like `https://signflow-pdf-production.up.railway.app`.
+
+#### Option B: Render
+
+1. Create a [Render](https://render.com/) account and connect your repo.
+2. New → **Web Service** → Connect your SignFlow repo.
+3. Configure:
+   - **Root Directory**: `pdf-server`
+   - **Environment**: Docker
+   - **Docker Command**: (leave default – uses Dockerfile)
+
+4. Add environment variables:
+   - `SUPABASE_URL` – Your Supabase project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` – Supabase service role key
+
+5. Deploy. Render will assign a URL like `https://signflow-pdf.onrender.com`.
+
+### Configure Frontend (Vercel)
+
+1. In Vercel → Project → **Settings** → **Environment Variables**.
+2. Add:
+   - `VITE_PDF_API_URL` = `https://your-pdf-server-url` (the Railway or Render URL from above, **no trailing slash**)
+3. Redeploy the frontend so it picks up the new variable.
+
 ## Project Structure
 
 ```
