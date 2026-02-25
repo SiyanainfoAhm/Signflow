@@ -45,7 +45,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
             className={cn(
               'flex items-center justify-center w-6 h-6 rounded-md border-2 transition-all duration-200 touch-manipulation shrink-0',
               checked
-                ? 'bg-[var(--brand)] border-[var(--brand)] shadow-sm'
+                ? 'bg-black border-black shadow-sm'
                 : 'bg-white border-gray-500 group-hover:border-gray-600 active:border-gray-700',
               disabled && 'group-hover:border-gray-500'
             )}

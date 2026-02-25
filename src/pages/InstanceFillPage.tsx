@@ -27,6 +27,7 @@ import { Stepper } from '../components/ui/Stepper';
 import { QuestionRenderer } from '../components/form-fill/QuestionRenderer';
 import { SectionLikertTable } from '../components/form-fill/SectionLikertTable';
 import { SignatureField } from '../components/form-fill/SignatureField';
+import { AppendixAMatrixForm } from '../components/form-fill/AppendixAMatrixForm';
 import { DatePicker } from '../components/ui/DatePicker';
 
 const PDF_BASE = import.meta.env.VITE_PDF_API_URL ?? '';
@@ -287,6 +288,7 @@ export const InstanceFillPage: React.FC = () => {
         else if (Array.isArray(value)) json = value;
         else if (value && typeof value === 'object') json = value;
         await saveAnswer(id, questionId, rowId, { text, number: num, json });
+        setPdfRefresh((r) => r + 1);
       }, 300);
     },
     [id]
@@ -488,18 +490,42 @@ export const InstanceFillPage: React.FC = () => {
                           <div className="p-4 space-y-4">
                             {section.questions
                               .filter((q) => isRoleVisible((q.role_visibility as Record<string, boolean>) || {}, role))
+                              .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
                               .map((q) => {
                                 const re = (q.role_editability as Record<string, boolean>) || {};
                                 const editable = isRoleEditable(re, role);
                                 const key = getAnswerKey(q.id, null);
                                 const val = answers[key];
                                 if (isAppendixA) {
-                                  if (q.code === 'reasonable_adjustment_appendix.task') {
+                                  const isTaskField = q.code === 'reasonable_adjustment_appendix.task' || (q.code === 'reasonable_adjustment.task' && q.type === 'short_text');
+                                  const isExplanationField = q.code === 'reasonable_adjustment_appendix.explanation' || q.code === 'reasonable_adjustment.description';
+                                  if (isTaskField) {
                                     return (
                                       <QuestionRenderer key={q.id} question={q} value={(val as string) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string)} disabled={!editable} error={errors[`q-${q.id}`]} />
                                     );
                                   }
-                                  if (q.code === 'reasonable_adjustment_appendix.explanation') {
+                                  if (isExplanationField) {
+                                    return (
+                                      <QuestionRenderer key={q.id} question={q} value={(val as string) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string)} disabled={!editable} error={errors[`q-${q.id}`]} />
+                                    );
+                                  }
+                                  if (q.code === 'reasonable_adjustment_appendix.matrix' || (q.pdf_meta as Record<string, unknown>)?.appendixMatrix) {
+                                    const matrixVal = val && typeof val === 'object' && !Array.isArray(val) ? (val as Record<string, boolean>) : {};
+                                    return (
+                                      <AppendixAMatrixForm
+                                        key={q.id}
+                                        value={matrixVal}
+                                        onChange={(v) => handleAnswerChange(q.id, null, v)}
+                                        disabled={!editable}
+                                      />
+                                    );
+                                  }
+                                  if (q.type === 'short_text' && !isTaskField) {
+                                    return (
+                                      <QuestionRenderer key={q.id} question={q} value={(val as string) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string)} disabled={!editable} error={errors[`q-${q.id}`]} />
+                                    );
+                                  }
+                                  if (q.type === 'long_text' && !isExplanationField) {
                                     return (
                                       <QuestionRenderer key={q.id} question={q} value={(val as string) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string)} disabled={!editable} error={errors[`q-${q.id}`]} />
                                     );
@@ -520,6 +546,11 @@ export const InstanceFillPage: React.FC = () => {
                                           <DatePicker value={dateVal} onChange={(newDate) => { const base = sigObj || (typeof sigVal === 'string' ? { signature: sigVal } : {}); handleAnswerChange(q.id, null, { ...base, date: newDate } as string | number | boolean | Record<string, unknown> | string[]); }} disabled={!editable} compact placement="above" className="flex-1 min-w-0" />
                                         </div>
                                       </div>
+                                    );
+                                  }
+                                  if (q.type === 'yes_no') {
+                                    return (
+                                      <QuestionRenderer key={q.id} question={q} value={(val as string | number | boolean) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string | number | boolean)} disabled={!editable} error={errors[`q-${q.id}`]} />
                                     );
                                   }
                                   return null;
@@ -643,7 +674,7 @@ export const InstanceFillPage: React.FC = () => {
                                               handleAnswerChange(q.id, null, next);
                                             }}
                                             disabled={!submissionEditable}
-                                            className="w-[18px] h-[18px] flex-shrink-0 cursor-pointer accent-gray-800"
+                                            className="w-[18px] h-[18px] flex-shrink-0 cursor-pointer accent-black"
                                           />
                                           <span className="text-gray-700">{opt.label}</span>
                                           {isOther && (

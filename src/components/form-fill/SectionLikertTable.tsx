@@ -83,7 +83,7 @@ export const SectionLikertTable: React.FC<SectionLikertTableProps> = ({
                           checked={currentVal === String(n)}
                           onChange={() => onChange(q.id, row.id, String(n))}
                           disabled={disabled}
-                          className="w-3.5 h-3.5 accent-[var(--brand)]"
+                          className="w-3.5 h-3.5 accent-black"
                         />
                       </label>
                     </td>

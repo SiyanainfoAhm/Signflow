@@ -160,6 +160,7 @@ export const SignatureField: React.FC<SignatureFieldProps> = ({
             <div className="border-2 border-gray-300 rounded-lg overflow-hidden bg-white">
               <SignatureCanvas
                 ref={canvasRef}
+                penColor="#dc2626"
                 canvasProps={{
                   width: 600,
                   height: 240,

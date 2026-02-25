@@ -78,7 +78,7 @@ export const LikertTableQuestion: React.FC<LikertTableQuestionProps> = ({
                           }
                         }}
                         disabled={disabled}
-                        className="w-4 h-4 accent-[var(--brand)]"
+                        className="w-4 h-4 accent-black"
                       />
                     </label>
                   </td>

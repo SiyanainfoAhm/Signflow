@@ -292,6 +292,7 @@ export const PremiumSignatureBlock: React.FC<PremiumSignatureBlockProps> = ({ se
             <div className="border-2 border-[var(--border)] rounded-lg overflow-hidden bg-white">
               <SignatureCanvas
                 ref={modalSigPadRef}
+                penColor="#dc2626"
                 canvasProps={{
                   width: 600,
                   height: 320,

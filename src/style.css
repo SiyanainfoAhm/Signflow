@@ -26,6 +26,12 @@
     overflow-x: hidden;
   }
 
+  /* Black accent for checkboxes and radio buttons */
+  input[type="radio"],
+  input[type="checkbox"] {
+    accent-color: #000000;
+  }
+
   /* Mobile-specific improvements */
   @media (max-width: 640px) {
     /* Prevent zoom on input focus for iOS */
