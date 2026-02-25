@@ -1159,14 +1159,14 @@ export function buildHtml(data: {
           const v = answers.get(`q-${sigQ.question.id}`);
           if (v && typeof v === 'object' && !Array.isArray(v)) {
             const o = v as Record<string, unknown>;
-            sigVal = typeof o.signature === 'string' ? o.signature : (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null);
+            sigVal = (typeof o.signature === 'string' ? o.signature : null) ?? (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null) ?? (typeof o.typedText === 'string' ? o.typedText : null);
             dateVal = String(o.date ?? o.signedAtDate ?? '');
             if (o.name != null || o.fullName != null) trainerNameVal = String(o.name ?? o.fullName ?? '');
-          } else if (typeof v === 'string' && v.startsWith('data:')) {
+          } else if (typeof v === 'string' && v) {
             sigVal = v;
           }
         }
-        const sigDisplay = sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : '';
+        const sigDisplay = renderSignatureHtml(sigVal ?? '');
         if (!isAppendixA) {
           html += `<h3>${headerNum}. Reasonable Adjustment</h3>`;
           headerNum++;
@@ -1255,22 +1255,20 @@ export function buildHtml(data: {
               if (val && typeof val === 'object' && !Array.isArray(val)) {
                 const o = val as Record<string, unknown>;
                 nameVal = String(o.name ?? o.fullName ?? codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
-                sigVal = typeof o.signature === 'string' ? o.signature : (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null);
+                sigVal = (typeof o.signature === 'string' ? o.signature : null) ?? (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null) ?? (typeof o.typedText === 'string' ? o.typedText : null);
                 dateVal = String(o.date ?? o.signedAtDate ?? '');
-              } else if (typeof val === 'string' && val.startsWith('data:')) {
+              } else if (typeof val === 'string' && val) {
                 sigVal = val;
                 nameVal = String(codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
               }
               const isStudent = code.startsWith('student');
               if (isStudent) {
                 html += '<div class="decl-sig-inline-block">';
-                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : `<span class="decl-sig-line"></span>`}</div>`;
+                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${renderSignatureHtml(sigVal ?? '') || '<span class="decl-sig-line"></span>'}</div>`;
                 if (showDate) html += `<div class="decl-sig-inline"><span class="decl-sig-label">Date:</span><span class="decl-sig-line">${dateVal || ''}</span></div>`;
                 html += '</div>';
               } else {
-                const sigDisplay = sigVal
-                  ? `<img src="${sigVal}" class="signature-img" alt="Signature" />`
-                  : `<span class="decl-sig-value">${nameVal || '-'}</span>`;
+                const sigDisplay = renderSignatureHtml(sigVal ?? '') || `<span class="decl-sig-value">${nameVal || '-'}</span>`;
                 html += `<div class="decl-sig-heading">${question.label}</div>`;
                 html += '<table class="decl-table"><tbody>';
                 if (showName) html += `<tr><td class="decl-label">Trainer/Assessor Name</td><td class="decl-value">${nameVal || ''}</td></tr>`;
@@ -1312,22 +1310,20 @@ export function buildHtml(data: {
               if (val && typeof val === 'object' && !Array.isArray(val)) {
                 const o = val as Record<string, unknown>;
                 nameVal = String(o.name ?? o.fullName ?? codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
-                sigVal = typeof o.signature === 'string' ? o.signature : (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null);
+                sigVal = (typeof o.signature === 'string' ? o.signature : null) ?? (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null) ?? (typeof o.typedText === 'string' ? o.typedText : null);
                 dateVal = String(o.date ?? o.signedAtDate ?? '');
-              } else if (typeof val === 'string' && val.startsWith('data:')) {
+              } else if (typeof val === 'string' && val) {
                 sigVal = val;
                 nameVal = String(codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
               }
               const isStudent = code.startsWith('student');
               if (isStudent) {
                 html += '<div class="decl-sig-inline-block">';
-                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : `<span class="decl-sig-line"></span>`}</div>`;
+                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${renderSignatureHtml(sigVal ?? '') || '<span class="decl-sig-line"></span>'}</div>`;
                 if (showDate) html += `<div class="decl-sig-inline"><span class="decl-sig-label">Date:</span><span class="decl-sig-line">${dateVal || ''}</span></div>`;
                 html += '</div>';
               } else {
-                const sigDisplay = sigVal
-                  ? `<img src="${sigVal}" class="signature-img" alt="Signature" />`
-                  : `<span class="decl-sig-value">${nameVal || '-'}</span>`;
+                const sigDisplay = renderSignatureHtml(sigVal ?? '') || `<span class="decl-sig-value">${nameVal || '-'}</span>`;
                 html += `<div class="decl-sig-heading">${question.label}</div>`;
                 html += '<table class="decl-table"><tbody>';
                 if (showName) html += `<tr><td class="decl-label">Trainer/Assessor Name</td><td class="decl-value">${nameVal || ''}</td></tr>`;
@@ -1380,7 +1376,8 @@ export function buildHtml(data: {
             html += `<tr><td colspan="2" class="sub-section-header">${groupName}</td></tr>`;
             for (const { question, rows } of groupQs) {
               const key = rows[0] ? `q-${question.id}-${rows[0].id}` : `q-${question.id}`;
-              const val = answers.get(key);
+              const rawVal = answers.get(key);
+              const val = (rawVal != null && rawVal !== '') ? rawVal : (question.code ? codeToValue.get(question.code) : undefined);
               const rowClass = rowIdx++ % 2 === 0 ? 'row-normal' : 'row-alt';
               html += `<tr class="${rowClass}"><td class="label-cell">${question.label}</td><td class="value-cell">${val ?? ''}</td></tr>`;
             }

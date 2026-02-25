@@ -636,6 +636,16 @@ export const AdminFormBuilderPage: React.FC = () => {
     setSteps((prev) =>
       prev.map((s) => (s.id === stepId ? { ...s, ...updates } : s))
     );
+    if (updates.title != null) {
+      const step = steps.find((s) => s.id === stepId);
+      const taskLinkedModes = ['task_instructions', 'task_questions', 'task_results'];
+      const firstTaskSec = step?.sections.find((sec) => taskLinkedModes.includes(sec.pdf_render_mode));
+      const rowId = firstTaskSec ? (firstTaskSec as FormSection & { assessment_task_row_id?: number | null }).assessment_task_row_id : null;
+      if (rowId != null) {
+        await supabase.from('skyline_form_question_rows').update({ row_label: updates.title }).eq('id', rowId);
+        setAssessmentTaskRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, row_label: updates.title } : r)));
+      }
+    }
   };
 
   const addSection = async () => {
@@ -708,9 +718,10 @@ export const AdminFormBuilderPage: React.FC = () => {
     if (!step) return;
     const stepIndex = steps.findIndex((s) => s.id === stepId);
     const newSortOrder = step.sort_order + 1;
+    const newStepTitle = `${step.title} (Copy)`;
     const { data: newStep } = await supabase
       .from('skyline_form_steps')
-      .insert({ form_id: Number(formId), title: `${step.title} (Copy)`, subtitle: step.subtitle, sort_order: newSortOrder })
+      .insert({ form_id: Number(formId), title: newStepTitle, subtitle: step.subtitle, sort_order: newSortOrder })
       .select('*')
       .single();
     if (!newStep) return;
@@ -719,9 +730,34 @@ export const AdminFormBuilderPage: React.FC = () => {
         await supabase.from('skyline_form_steps').update({ sort_order: s.sort_order + 1 }).eq('id', s.id);
       }
     }
+    // If this step has task-linked sections, create a new row in the assessment tasks grid and link sections to it
+    let newRowId: number | null = null;
+    const taskLinkedModes = ['task_instructions', 'task_questions', 'task_results'];
+    const firstTaskSec = step.sections.find((sec) => taskLinkedModes.includes(sec.pdf_render_mode));
+    const origRowId = firstTaskSec ? (firstTaskSec as FormSection & { assessment_task_row_id?: number | null }).assessment_task_row_id : null;
+    if (assessmentTasksGridQuestionId != null && origRowId != null) {
+      const { data: origRow } = await supabase.from('skyline_form_question_rows').select('row_help, row_meta').eq('id', origRowId).single();
+      const { data: existingRows } = await supabase.from('skyline_form_question_rows').select('sort_order').eq('question_id', assessmentTasksGridQuestionId);
+      const maxSort = existingRows?.length ? Math.max(...(existingRows as { sort_order: number }[]).map((r) => r.sort_order)) : -1;
+      const nextSort = maxSort + 1;
+      const { data: newRow } = await supabase
+        .from('skyline_form_question_rows')
+        .insert({
+          question_id: assessmentTasksGridQuestionId,
+          row_label: newStepTitle,
+          row_help: origRow ? (origRow as { row_help: string | null }).row_help : null,
+          row_meta: origRow ? (origRow as { row_meta: unknown }).row_meta : {},
+          sort_order: nextSort,
+        })
+        .select('id')
+        .single();
+      if (newRow) newRowId = (newRow as { id: number }).id;
+    }
     const newStepWithSections = { ...newStep, sections: [] as (FormSection & { questions: FormQuestion[] })[] };
     for (const sec of step.sections) {
       const secWithRow = sec as FormSection & { assessment_task_row_id?: number | null };
+      const isTaskLinked = taskLinkedModes.includes(sec.pdf_render_mode);
+      const rowIdForSec = isTaskLinked && newRowId != null ? newRowId : (secWithRow.assessment_task_row_id ?? null);
       const { data: newSec } = await supabase
         .from('skyline_form_sections')
         .insert({
@@ -730,7 +766,7 @@ export const AdminFormBuilderPage: React.FC = () => {
           description: sec.description,
           pdf_render_mode: sec.pdf_render_mode,
           sort_order: sec.sort_order,
-          assessment_task_row_id: secWithRow.assessment_task_row_id ?? null,
+          assessment_task_row_id: rowIdForSec,
         })
         .select('*')
         .single();
@@ -786,6 +822,10 @@ export const AdminFormBuilderPage: React.FC = () => {
     setSteps(reordered);
     setSelectedStepId((newStep as FormStep).id);
     setSelectedSectionId(newStepWithSections.sections[0]?.id ?? null);
+    if (newRowId != null && assessmentTasksGridQuestionId != null) {
+      const { data } = await supabase.from('skyline_form_question_rows').select('id, row_label').eq('question_id', assessmentTasksGridQuestionId).order('sort_order');
+      setAssessmentTaskRows((data as AssessmentTaskRow[]) || []);
+    }
   };
 
   const duplicateSection = async (sectionId: number) => {
@@ -796,6 +836,9 @@ export const AdminFormBuilderPage: React.FC = () => {
     if (!section) return;
     const secIndex = step.sections.findIndex((s) => s.id === sectionId);
     const secWithRow = section as FormSection & { assessment_task_row_id?: number | null };
+    // Task-linked sections: do not inherit the original task link when duplicating, so the user explicitly selects the correct task
+    const isTaskLinked = ['task_results', 'task_instructions', 'task_questions'].includes(section.pdf_render_mode);
+    const newRowId = isTaskLinked ? null : (secWithRow.assessment_task_row_id ?? null);
     const { data: newSec } = await supabase
       .from('skyline_form_sections')
       .insert({
@@ -804,7 +847,7 @@ export const AdminFormBuilderPage: React.FC = () => {
         description: section.description,
         pdf_render_mode: section.pdf_render_mode,
         sort_order: section.sort_order + 1,
-        assessment_task_row_id: secWithRow.assessment_task_row_id ?? null,
+        assessment_task_row_id: newRowId,
       })
       .select('*')
       .single();

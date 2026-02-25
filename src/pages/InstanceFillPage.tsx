@@ -102,18 +102,31 @@ export const InstanceFillPage: React.FC = () => {
     loadData();
   }, [loadData]);
 
+  /** Normalize signature values: accept string or object with signature/imageDataUrl/typedText. DB stores TEXT. */
+  const normalizeSignatureValue = useCallback((v: string | null | { signature?: string; imageDataUrl?: string; typedText?: string } | undefined): string | null => {
+    if (v == null) return null;
+    if (typeof v === 'string') return v.trim() || null;
+    if (typeof v === 'object' && !Array.isArray(v)) {
+      const s = String((v as Record<string, unknown>).signature ?? (v as Record<string, unknown>).imageDataUrl ?? (v as Record<string, unknown>).typedText ?? '').trim();
+      return s || null;
+    }
+    return null;
+  }, []);
+
   const handleResultsDataChange = useCallback(
-    (sectionId: number, field: keyof import('../lib/formEngine').ResultsDataEntry, value: string | null) => {
+    async (sectionId: number, field: keyof import('../lib/formEngine').ResultsDataEntry, value: string | null) => {
+      const isSig = field === 'student_signature' || field === 'trainer_signature';
+      const normalized = isSig ? normalizeSignatureValue(value) : (value != null ? String(value).trim() || null : null);
       setResultsData((prev) => {
         const next = { ...prev };
         if (!next[sectionId]) next[sectionId] = { section_id: sectionId } as import('../lib/formEngine').ResultsDataEntry;
-        (next[sectionId] as unknown as Record<string, unknown>)[field] = value;
-        saveResultsData(id, sectionId, { [field]: value });
-        setPdfRefresh((r) => r + 1);
+        (next[sectionId] as unknown as Record<string, unknown>)[field] = normalized;
         return next;
       });
+      await saveResultsData(id, sectionId, { [field]: normalized });
+      setPdfRefresh((r) => r + 1);
     },
-    [id]
+    [id, normalizeSignatureValue]
   );
 
   useEffect(() => {
@@ -275,19 +288,24 @@ export const InstanceFillPage: React.FC = () => {
     });
   }, [template, answers, resultsData, assessmentSummary, id]);
 
+  const valueToSavePayload = (value: string | number | boolean | Record<string, unknown> | string[]) => {
+    let text: string | undefined;
+    let num: number | undefined;
+    let json: unknown;
+    if (typeof value === 'string') text = value;
+    else if (typeof value === 'number') num = value;
+    else if (typeof value === 'boolean') text = value ? 'true' : 'false';
+    else if (Array.isArray(value)) json = value;
+    else if (value && typeof value === 'object') json = value;
+    return { text, number: num, json };
+  };
+
   const debouncedSave = useCallback(
     (questionId: number, rowId: number | null, value: string | number | boolean | Record<string, unknown> | string[]) => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(async () => {
-        let text: string | undefined;
-        let num: number | undefined;
-        let json: unknown;
-        if (typeof value === 'string') text = value;
-        else if (typeof value === 'number') num = value;
-        else if (typeof value === 'boolean') text = value ? 'true' : 'false';
-        else if (Array.isArray(value)) json = value;
-        else if (value && typeof value === 'object') json = value;
-        await saveAnswer(id, questionId, rowId, { text, number: num, json });
+        const payload = valueToSavePayload(value);
+        await saveAnswer(id, questionId, rowId, payload);
         setPdfRefresh((r) => r + 1);
       }, 300);
     },
@@ -295,12 +313,19 @@ export const InstanceFillPage: React.FC = () => {
   );
 
   const handleAnswerChange = useCallback(
-    (questionId: number, rowId: number | null, value: string | number | boolean | Record<string, unknown> | string[]) => {
+    (questionId: number, rowId: number | null, value: string | number | boolean | Record<string, unknown> | string[], immediate = false) => {
       const key = getAnswerKey(questionId, rowId);
       setAnswers((prev) => ({ ...prev, [key]: value }));
-      debouncedSave(questionId, rowId, value);
+      if (immediate) {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = undefined;
+        const payload = valueToSavePayload(value);
+        saveAnswer(id, questionId, rowId, payload).then(() => setPdfRefresh((r) => r + 1));
+      } else {
+        debouncedSave(questionId, rowId, value);
+      }
     },
-    [debouncedSave]
+    [debouncedSave, id]
   );
 
   const handleTrainerAssessmentChange = useCallback(
@@ -539,7 +564,7 @@ export const InstanceFillPage: React.FC = () => {
                                       <div key={q.id} className="flex items-center gap-4 flex-wrap pt-2">
                                         <div className="flex-1 min-w-[200px]">
                                           <div className="text-sm font-semibold text-gray-700 mb-1">{q.label}</div>
-                                          <SignatureField value={(imgVal as string | null) ?? null} onChange={(v) => { const img = typeof v === 'string' ? v : null; const base = (sigObj && typeof sigObj === 'object' ? { ...sigObj } : {}) as Record<string, unknown>; handleAnswerChange(q.id, null, (img != null ? { ...base, signature: img } : { ...base, signature: null }) as string | number | boolean | Record<string, unknown> | string[]); }} disabled={!editable} suggestionFrom={raSigSuggestion} onSuggestionClick={raSigSuggestion && editable ? () => { const base = (sigObj && typeof sigObj === 'object' ? { ...sigObj } : {}) as Record<string, unknown>; handleAnswerChange(q.id, null, { ...base, signature: raSigSuggestion, date: raDateSuggestion } as string | number | boolean | Record<string, unknown> | string[]); } : undefined} />
+                                          <SignatureField value={(imgVal as string | null) ?? null} onChange={(v) => { const img = typeof v === 'string' ? v : null; const base = (sigObj && typeof sigObj === 'object' ? { ...sigObj } : {}) as Record<string, unknown>; handleAnswerChange(q.id, null, (img != null ? { ...base, signature: img } : { ...base, signature: null }) as string | number | boolean | Record<string, unknown> | string[]); }} disabled={!editable} suggestionFrom={raSigSuggestion} onSuggestionClick={raSigSuggestion && editable ? () => { const base = (sigObj && typeof sigObj === 'object' ? { ...sigObj } : {}) as Record<string, unknown>; handleAnswerChange(q.id, null, { ...base, signature: raSigSuggestion, date: raDateSuggestion } as string | number | boolean | Record<string, unknown> | string[], true); } : undefined} />
                                         </div>
                                         <div className="flex items-center gap-2 min-w-[140px]">
                                           <span className="text-sm font-semibold text-gray-700 shrink-0">Date:</span>
@@ -591,7 +616,7 @@ export const InstanceFillPage: React.FC = () => {
                                           suggestionFrom={raSigSuggestion}
                                           onSuggestionClick={raSigSuggestion && editable ? () => {
                                             const base = (sigObj && typeof sigObj === 'object' ? { ...sigObj } : {}) as Record<string, unknown>;
-                                            handleAnswerChange(q.id, null, { ...base, signature: raSigSuggestion, date: raDateSuggestion } as string | number | boolean | Record<string, unknown> | string[]);
+                                            handleAnswerChange(q.id, null, { ...base, signature: raSigSuggestion, date: raDateSuggestion } as string | number | boolean | Record<string, unknown> | string[], true);
                                           } : undefined}
                                         />
                                       </div>
@@ -1319,7 +1344,7 @@ export const InstanceFillPage: React.FC = () => {
                                           suggestionFrom={studentSigSuggestion}
                                           onSuggestionClick={studentSigSuggestion && editable ? () => {
                                             const base = (sigObj && typeof sigObj === 'object' ? { ...sigObj } : {}) as Record<string, unknown>;
-                                            handleAnswerChange(q.id, null, { ...base, signature: studentSigSuggestion, date: todayIsoDecl } as string | number | boolean | Record<string, unknown> | string[]);
+                                            handleAnswerChange(q.id, null, { ...base, signature: studentSigSuggestion, date: todayIsoDecl } as string | number | boolean | Record<string, unknown> | string[], true);
                                           } : undefined}
                                         />
                                       </div>
@@ -1463,7 +1488,7 @@ export const InstanceFillPage: React.FC = () => {
                                       suggestionFrom={studentSigSuggestion}
                                       onSuggestionClick={studentSigSuggestion && editable ? () => {
                                         const base = (sigObj && typeof sigObj === 'object' ? { ...sigObj } : {}) as Record<string, unknown>;
-                                        handleAnswerChange(q.id, null, { ...base, signature: studentSigSuggestion, date: todayIsoDecl } as string | number | boolean | Record<string, unknown> | string[]);
+                                        handleAnswerChange(q.id, null, { ...base, signature: studentSigSuggestion, date: todayIsoDecl } as string | number | boolean | Record<string, unknown> | string[], true);
                                       } : undefined}
                                     />
                                   </div>

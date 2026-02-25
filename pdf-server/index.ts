@@ -86,11 +86,18 @@ interface FormQuestionOption {
   sort_order: number;
 }
 
-/** Renders signature value: image (data:...) as img, plain text as red italic span */
-function renderSignatureHtml(val: string | null | undefined): string {
-  if (!val) return '';
-  if (val.startsWith('data:')) return '<img src="' + val.replace(/"/g, '&quot;') + '" alt="Signature" style="max-height:36px;max-width:140px" />';
-  const escaped = String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+/** Renders signature value: image (data:...) as img, plain text as red italic span. Accepts string or object with signature/imageDataUrl. */
+function renderSignatureHtml(val: string | null | undefined | Record<string, unknown>): string {
+  let s: string | null = null;
+  if (val == null) s = null;
+  else if (typeof val === 'string') s = val.trim() || null;
+  else if (typeof val === 'object' && !Array.isArray(val)) {
+    const v = val as Record<string, unknown>;
+    s = String(v.signature ?? v.imageDataUrl ?? v.typedText ?? '').trim() || null;
+  }
+  if (!s) return '';
+  if (s.startsWith('data:')) return '<img src="' + s.replace(/"/g, '&quot;') + '" alt="Signature" style="max-height:36px;max-width:140px" />';
+  const escaped = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   return '<span style="color:#dc2626;font-style:italic;font-family:serif">' + escaped + '</span>';
 }
 
@@ -1200,14 +1207,14 @@ function buildHtml(data: {
           const v = answers.get(`q-${sigQ.question.id}`);
           if (v && typeof v === 'object' && !Array.isArray(v)) {
             const o = v as Record<string, unknown>;
-            sigVal = typeof o.signature === 'string' ? o.signature : (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null);
+            sigVal = (typeof o.signature === 'string' ? o.signature : null) ?? (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null) ?? (typeof o.typedText === 'string' ? o.typedText : null);
             dateVal = String(o.date ?? o.signedAtDate ?? '');
             if (o.name != null || o.fullName != null) trainerNameVal = String(o.name ?? o.fullName ?? '');
-          } else if (typeof v === 'string' && v.startsWith('data:')) {
+          } else if (typeof v === 'string' && v) {
             sigVal = v;
           }
         }
-        const sigDisplay = sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : '';
+        const sigDisplay = renderSignatureHtml(sigVal ?? '');
         if (!isAppendixA) {
           html += `<h3>${headerNum}. Reasonable Adjustment</h3>`;
           headerNum++;
@@ -1288,22 +1295,20 @@ function buildHtml(data: {
               if (val && typeof val === 'object' && !Array.isArray(val)) {
                 const o = val as Record<string, unknown>;
                 nameVal = String(o.name ?? o.fullName ?? codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
-                sigVal = typeof o.signature === 'string' ? o.signature : (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null);
+                sigVal = (typeof o.signature === 'string' ? o.signature : null) ?? (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null) ?? (typeof o.typedText === 'string' ? o.typedText : null);
                 dateVal = String(o.date ?? o.signedAtDate ?? '');
-              } else if (typeof val === 'string' && val.startsWith('data:')) {
+              } else if (typeof val === 'string' && val) {
                 sigVal = val;
                 nameVal = String(codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
               }
               const isStudent = code.startsWith('student');
               if (isStudent) {
                 html += '<div class="decl-sig-inline-block">';
-                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : `<span class="decl-sig-line"></span>`}</div>`;
+                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${renderSignatureHtml(sigVal ?? '') || '<span class="decl-sig-line"></span>'}</div>`;
                 if (showDate) html += `<div class="decl-sig-inline"><span class="decl-sig-label">Date:</span><span class="decl-sig-line">${dateVal || ''}</span></div>`;
                 html += '</div>';
               } else {
-                const sigDisplay = sigVal
-                  ? `<img src="${sigVal}" class="signature-img" alt="Signature" />`
-                  : `<span class="decl-sig-value">${nameVal || '-'}</span>`;
+                const sigDisplay = renderSignatureHtml(sigVal ?? '') || `<span class="decl-sig-value">${nameVal || '-'}</span>`;
                 html += `<div class="decl-sig-heading">${question.label}</div>`;
                 html += '<table class="decl-table"><tbody>';
                 if (showName) html += `<tr><td class="decl-label">Trainer/Assessor Name</td><td class="decl-value">${nameVal || ''}</td></tr>`;
@@ -1345,22 +1350,20 @@ function buildHtml(data: {
               if (val && typeof val === 'object' && !Array.isArray(val)) {
                 const o = val as Record<string, unknown>;
                 nameVal = String(o.name ?? o.fullName ?? codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
-                sigVal = typeof o.signature === 'string' ? o.signature : (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null);
+                sigVal = (typeof o.signature === 'string' ? o.signature : null) ?? (typeof o.imageDataUrl === 'string' ? o.imageDataUrl : null) ?? (typeof o.typedText === 'string' ? o.typedText : null);
                 dateVal = String(o.date ?? o.signedAtDate ?? '');
-              } else if (typeof val === 'string' && val.startsWith('data:')) {
+              } else if (typeof val === 'string' && val) {
                 sigVal = val;
                 nameVal = String(codeToValue.get(code.startsWith('student') ? 'student.fullName' : 'trainer.fullName') ?? '');
               }
               const isStudent = code.startsWith('student');
               if (isStudent) {
                 html += '<div class="decl-sig-inline-block">';
-                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${sigVal ? `<img src="${sigVal}" class="signature-img" alt="Signature" />` : `<span class="decl-sig-line"></span>`}</div>`;
+                html += `<div class="decl-sig-inline"><span class="decl-sig-label">${question.label}:</span>${renderSignatureHtml(sigVal ?? '') || '<span class="decl-sig-line"></span>'}</div>`;
                 if (showDate) html += `<div class="decl-sig-inline"><span class="decl-sig-label">Date:</span><span class="decl-sig-line">${dateVal || ''}</span></div>`;
                 html += '</div>';
               } else {
-                const sigDisplay = sigVal
-                  ? `<img src="${sigVal}" class="signature-img" alt="Signature" />`
-                  : `<span class="decl-sig-value">${nameVal || '-'}</span>`;
+                const sigDisplay = renderSignatureHtml(sigVal ?? '') || `<span class="decl-sig-value">${nameVal || '-'}</span>`;
                 html += `<div class="decl-sig-heading">${question.label}</div>`;
                 html += '<table class="decl-table"><tbody>';
                 if (showName) html += `<tr><td class="decl-label">Trainer/Assessor Name</td><td class="decl-value">${nameVal || ''}</td></tr>`;
@@ -1413,7 +1416,8 @@ function buildHtml(data: {
             html += `<tr><td colspan="2" class="sub-section-header">${groupName}</td></tr>`;
             for (const { question, rows } of groupQs) {
               const key = rows[0] ? `q-${question.id}-${rows[0].id}` : `q-${question.id}`;
-              const val = answers.get(key);
+              const rawVal = answers.get(key);
+              const val = (rawVal != null && rawVal !== '') ? rawVal : (question.code ? codeToValue.get(question.code) : undefined);
               const rowClass = rowIdx++ % 2 === 0 ? 'row-normal' : 'row-alt';
               html += `<tr class="${rowClass}"><td class="label-cell">${question.label}</td><td class="value-cell">${val ?? ''}</td></tr>`;
             }
@@ -1490,6 +1494,16 @@ app.get('/pdf/:instanceId', async (req, res) => {
         .from('skyline_form_results_data')
         .select('section_id, first_attempt_satisfactory, first_attempt_date, first_attempt_feedback, second_attempt_satisfactory, second_attempt_date, second_attempt_feedback, student_name, student_signature, trainer_name, trainer_signature, trainer_date')
         .eq('instance_id', instanceId);
+      function normalizeSig(v: unknown): string | null {
+        if (v == null) return null;
+        if (typeof v === 'string') return v.trim() || null;
+        if (typeof v === 'object' && !Array.isArray(v)) {
+          const o = v as Record<string, unknown>;
+          const s = String(o.signature ?? o.imageDataUrl ?? o.typedText ?? '').trim();
+          return s || null;
+        }
+        return null;
+      }
       for (const r of (resultsRows as Record<string, unknown>[]) || []) {
         const sid = r.section_id as number;
         resultsDataMap.set(sid, {
@@ -1500,9 +1514,9 @@ app.get('/pdf/:instanceId', async (req, res) => {
           second_attempt_date: (r.second_attempt_date as string) ?? null,
           second_attempt_feedback: (r.second_attempt_feedback as string) ?? null,
           student_name: (r.student_name as string) ?? null,
-          student_signature: (r.student_signature as string) ?? null,
+          student_signature: normalizeSig(r.student_signature),
           trainer_name: (r.trainer_name as string) ?? null,
-          trainer_signature: (r.trainer_signature as string) ?? null,
+          trainer_signature: normalizeSig(r.trainer_signature),
           trainer_date: (r.trainer_date as string) ?? null,
         });
       }
