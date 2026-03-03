@@ -1,0 +1,250 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { ExternalLink, RefreshCw, ClipboardCheck, LayoutDashboard } from 'lucide-react';
+import { listDashboardInstances, getDashboardPendingCount, issueInstanceAccessLink } from '../lib/formEngine';
+import type { SubmittedInstanceRow } from '../lib/formEngine';
+import { useAuth } from '../contexts/AuthContext';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Loader } from '../components/ui/Loader';
+import { toast } from '../utils/toast';
+
+const formatDateTime = (value: string | null): string => {
+  if (!value) return '-';
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return '-';
+  return dt.toLocaleString();
+};
+
+const getWorkflowLabel = (row: SubmittedInstanceRow): string => {
+  if (row.status === 'locked') return 'Completed';
+  if (row.status === 'draft') return 'Awaiting Student';
+  if (row.role_context === 'trainer') return 'Waiting Trainer';
+  if (row.role_context === 'office') return 'Waiting Office';
+  return 'Submitted';
+};
+
+const getWorkflowBadgeClass = (row: SubmittedInstanceRow): string => {
+  if (row.status === 'locked') return 'bg-emerald-100 text-emerald-800';
+  if (row.status === 'draft') return 'bg-slate-100 text-slate-700';
+  if (row.role_context === 'trainer') return 'bg-amber-100 text-amber-800';
+  if (row.role_context === 'office') return 'bg-blue-100 text-blue-800';
+  return 'bg-gray-100 text-gray-700';
+};
+
+export const DashboardPage: React.FC = () => {
+  const { user } = useAuth();
+  const role = user?.role === 'trainer' ? 'trainer' : 'office';
+  const PAGE_SIZE = 20;
+  const [rows, setRows] = useState<SubmittedInstanceRow[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const loadData = useCallback(
+    async (page: number, search: string, opts?: { silent?: boolean }) => {
+      if (!user?.id) return;
+      if (!opts?.silent) setLoading(true);
+      const [countRes, listRes] = await Promise.all([
+        getDashboardPendingCount(role, user.id),
+        listDashboardInstances(role, user.id, page, PAGE_SIZE, search),
+      ]);
+      setPendingCount(countRes);
+      setRows(listRes.data);
+      setTotalRows(listRes.total);
+      setLoading(false);
+    },
+    [user?.id, role]
+  );
+
+  useEffect(() => {
+    const t = setTimeout(() => loadData(currentPage, searchTerm), 250);
+    return () => clearTimeout(t);
+  }, [currentPage, searchTerm, loadData]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData(currentPage, searchTerm, { silent: true });
+    setRefreshing(false);
+    toast.success('Dashboard refreshed');
+  };
+
+  const handleOpen = async (row: SubmittedInstanceRow) => {
+    const targetRole =
+      row.role_context === 'trainer' ? 'trainer'
+      : row.role_context === 'office' ? 'office'
+      : row.status === 'locked' ? (role === 'office' ? 'office' : 'trainer')
+      : 'student';
+    const url = await issueInstanceAccessLink(row.id, targetRole);
+    if (!url) {
+      toast.error('Failed to open secure link');
+      return;
+    }
+    window.open(url, '_blank');
+  };
+
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const title = role === 'trainer' ? 'My Assessments' : 'Office Assessments';
+
+  return (
+    <div className="min-h-screen bg-[var(--bg)]">
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--text)] flex items-center gap-2">
+              <LayoutDashboard className="w-7 h-7 text-[var(--brand)]" />
+              Dashboard
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              {role === 'trainer'
+                ? 'Assessments for students in your batches'
+                : 'Assessments waiting for office processing and completed'}
+            </p>
+          </div>
+        </div>
+
+        {/* Pending count cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <Card className="bg-gradient-to-br from-[var(--brand)] to-[#ea580c] text-white overflow-hidden relative">
+            <div className="absolute top-0 right-0 w-24 h-24 -mt-4 -mr-4 rounded-full bg-white/10" />
+            <div className="relative">
+              <p className="text-white/90 text-sm font-medium">Pending</p>
+              <p className="text-4xl font-bold mt-1">{pendingCount}</p>
+              <p className="text-white/80 text-xs mt-1">
+                {role === 'trainer' ? 'Awaiting your review' : 'Awaiting office check'}
+              </p>
+            </div>
+          </Card>
+          <Card className="border border-[var(--border)]">
+            <p className="text-gray-600 text-sm font-medium">Total</p>
+            <p className="text-3xl font-bold text-[var(--text)] mt-1">{totalRows}</p>
+            <p className="text-gray-500 text-xs mt-1">Assessments in list</p>
+          </Card>
+          <Card className="border border-[var(--border)] hidden lg:block">
+            <p className="text-gray-600 text-sm font-medium">Role</p>
+            <p className="text-xl font-bold text-[var(--text)] mt-1 capitalize">{role}</p>
+            <p className="text-gray-500 text-xs mt-1">{user?.full_name}</p>
+          </Card>
+        </div>
+
+        <Card>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <h2 className="text-lg font-bold text-[var(--text)]">{title}</h2>
+            <div className="flex items-center gap-2">
+              <Input
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Search student, form..."
+                className="w-[220px]"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="inline-flex items-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
+          </div>
+
+          {loading ? (
+            <Loader variant="dots" size="lg" message="Loading assessments..." />
+          ) : rows.length === 0 ? (
+            <div className="py-12 text-center text-gray-500">
+              <ClipboardCheck className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+              <p>No assessments yet.</p>
+              <p className="text-sm mt-1">
+                {role === 'trainer'
+                  ? 'Assessments will appear when students in your batches are assigned forms.'
+                  : 'Assessments will appear once trainers submit them for office review.'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                    <th className="py-3 pr-3">Student</th>
+                    <th className="py-3 pr-3">Form</th>
+                    <th className="py-3 pr-3">Date</th>
+                    <th className="py-3 pr-3">Workflow</th>
+                    <th className="py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                      <td className="py-3 pr-3">
+                        <div className="font-medium text-gray-900">{row.student_name}</div>
+                        <div className="text-xs text-gray-500">{row.student_email || '-'}</div>
+                      </td>
+                      <td className="py-3 pr-3">
+                        <div className="font-medium text-gray-900">{row.form_name}</div>
+                        <div className="text-xs text-gray-500">v{row.form_version ?? '1.0.0'}</div>
+                      </td>
+                      <td className="py-3 pr-3 text-gray-700">{formatDateTime(row.submitted_at || row.created_at)}</td>
+                      <td className="py-3 pr-3">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getWorkflowBadgeClass(row)}`}
+                        >
+                          {getWorkflowLabel(row)}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpen(row)}
+                          className="inline-flex items-center gap-1.5"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Open
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!loading && totalRows > PAGE_SIZE && (
+            <div className="mt-4 flex justify-between items-center">
+              <span className="text-xs text-gray-500">
+                Page {currentPage} of {totalPages} ({totalRows} total)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+};

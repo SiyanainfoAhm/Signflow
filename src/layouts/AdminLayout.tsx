@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Outlet, NavLink, Link } from 'react-router-dom';
-import { FileText, Users, UserRoundCheck, ClipboardCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
+import { FileText, Users, UserRoundCheck, ClipboardCheck, ChevronLeft, ChevronRight, Layers, LogOut, LayoutDashboard, User } from 'lucide-react';
 import { cn } from '../components/utils/cn';
+import { useAuth } from '../contexts/AuthContext';
 
 const SIDEBAR_WIDTH_EXPANDED = 220;
 const SIDEBAR_WIDTH_COLLAPSED = 64;
@@ -9,13 +10,23 @@ const SIDEBAR_WIDTH_COLLAPSED = 64;
 export const AdminLayout: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [logoError, setLogoError] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const width = sidebarCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
+  const isTrainerOrOffice = user?.role === 'trainer' || user?.role === 'office';
 
-  const navItems: { to: string; label: string; icon: React.ReactNode; end?: boolean }[] = [
-    { to: '/admin/forms', label: 'Forms', icon: <FileText className="w-5 h-5 shrink-0" />, end: true },
-    { to: '/admin/students', label: 'Students', icon: <Users className="w-5 h-5 shrink-0" />, end: true },
-    { to: '/admin/trainers', label: 'Trainers', icon: <UserRoundCheck className="w-5 h-5 shrink-0" />, end: true },
-    { to: '/admin/assessments', label: 'Assessments', icon: <ClipboardCheck className="w-5 h-5 shrink-0" />, end: true },
+  const baseNavItems = isTrainerOrOffice
+    ? [{ to: '/admin/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5 shrink-0" />, end: true }]
+    : [
+        { to: '/admin/forms', label: 'Forms', icon: <FileText className="w-5 h-5 shrink-0" />, end: true },
+        { to: '/admin/students', label: 'Students', icon: <Users className="w-5 h-5 shrink-0" />, end: true },
+        { to: '/admin/batches', label: 'Batches', icon: <Layers className="w-5 h-5 shrink-0" />, end: true },
+        { to: '/admin/users', label: 'Users', icon: <UserRoundCheck className="w-5 h-5 shrink-0" />, end: true },
+        { to: '/admin/assessments', label: 'Assessments', icon: <ClipboardCheck className="w-5 h-5 shrink-0" />, end: true },
+      ];
+  const navItems = [
+    ...baseNavItems,
+    { to: '/admin/profile', label: 'My Profile', icon: <User className="w-5 h-5 shrink-0" />, end: true },
   ];
 
   return (
@@ -32,9 +43,9 @@ export const AdminLayout: React.FC = () => {
           )}
         >
           <Link
-            to="/admin/forms"
+            to={isTrainerOrOffice ? '/admin/dashboard' : '/admin/forms'}
             className="flex shrink-0 items-center justify-center overflow-hidden no-underline text-[var(--text)]"
-            aria-label="Forms"
+            aria-label={isTrainerOrOffice ? 'Dashboard' : 'Forms'}
           >
             {!logoError ? (
               <img
@@ -57,6 +68,11 @@ export const AdminLayout: React.FC = () => {
               </span>
             )}
           </Link>
+          {!sidebarCollapsed && user && (
+            <div className="text-xs text-gray-600 truncate max-w-[120px]" title={user.email}>
+              {user.full_name}
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setSidebarCollapsed((c) => !c)}
@@ -87,6 +103,21 @@ export const AdminLayout: React.FC = () => {
             ))}
           </ul>
         </nav>
+        {user && (
+          <div className="shrink-0 border-t border-[var(--border)] p-2">
+            <button
+              type="button"
+              onClick={() => { logout(); navigate('/login', { replace: true }); }}
+              className={cn(
+                'flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors',
+                sidebarCollapsed ? 'justify-center' : ''
+              )}
+            >
+              <LogOut className="w-5 h-5 shrink-0" />
+              {!sidebarCollapsed && <span>Logout</span>}
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Main content: no top padding, only left margin */}

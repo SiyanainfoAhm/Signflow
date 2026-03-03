@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Send, Mail, Phone, Pencil } from 'lucide-react';
-import { listStudentsPaged, createStudent, updateStudent, createFormInstance, listForms, issueInstanceAccessLink } from '../lib/formEngine';
+import { listStudentsPaged, createStudent, updateStudent, createFormInstance, getInstanceForStudentAndForm, listForms, issueInstanceAccessLink, listBatches, listStudentsInBatch } from '../lib/formEngine';
 import type { Student } from '../lib/formEngine';
 import type { Form } from '../types/database';
 import { Card } from '../components/ui/Card';
@@ -25,11 +25,16 @@ export const AdminStudentsPage: React.FC = () => {
   const [totalStudents, setTotalStudents] = useState(0);
   const [rowFormMap, setRowFormMap] = useState<Record<number, string>>({});
   const [sending, setSending] = useState<number | null>(null);
+  const [sendingBatch, setSendingBatch] = useState(false);
+  const [sendToBatchFormId, setSendToBatchFormId] = useState('');
+  const [sendToBatchBatchId, setSendToBatchBatchId] = useState('');
+  const [batches, setBatches] = useState<{ id: number; name: string }[]>([]);
   const [studentDraft, setStudentDraft] = useState({
     student_id: '',
     first_name: '',
     last_name: '',
     phone: '',
+    batch_id: '',
   });
 
   const digitsOnly = (val: string) => val.replace(/\D/g, '');
@@ -40,12 +45,14 @@ export const AdminStudentsPage: React.FC = () => {
     first_name: string;
     last_name: string;
     phone: string;
+    batch_id?: string;
   }): string | null => {
     const requiredFields: Array<[string, string]> = [
       ['student_id', 'Student ID'],
       ['first_name', 'First name'],
       ['last_name', 'Last name'],
       ['phone', 'Phone'],
+      ['batch_id', 'Batch'],
     ];
     for (const [key, label] of requiredFields) {
       if (!String((form as Record<string, unknown>)[key] ?? '').trim()) return `${label} is required.`;
@@ -57,9 +64,10 @@ export const AdminStudentsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    listForms('published').then((f) => {
-      setForms(f);
-    });
+    listForms('published').then((f) => setForms(f));
+  }, []);
+  useEffect(() => {
+    listBatches().then((b) => setBatches(b));
   }, []);
 
   useEffect(() => {
@@ -98,12 +106,18 @@ export const AdminStudentsPage: React.FC = () => {
       return;
     }
     setCreating(true);
+    const batchId = Number(studentDraft.batch_id);
+    if (!batchId || !Number.isFinite(batchId)) {
+      toast.error('Select a batch');
+      return;
+    }
     const created = await createStudent({
       student_id: studentDraft.student_id,
       first_name: studentDraft.first_name,
       last_name: studentDraft.last_name,
       phone: studentDraft.phone,
       email: buildStudentEmail(studentDraft.student_id),
+      batch_id: batchId,
     });
     if (created) {
       setCurrentPage(1);
@@ -115,6 +129,7 @@ export const AdminStudentsPage: React.FC = () => {
         first_name: '',
         last_name: '',
         phone: '',
+        batch_id: '',
       });
       setIsCreateOpen(false);
       toast.success('Student added');
@@ -128,18 +143,58 @@ export const AdminStudentsPage: React.FC = () => {
     const formId = Number(rowFormMap[studentId]);
     if (!formId) return;
     setSending(studentId);
-    const instance = await createFormInstance(formId, 'student', studentId);
+    const existing = await getInstanceForStudentAndForm(formId, studentId);
+    let instanceId: number | null = null;
+    if (existing) {
+      instanceId = existing.id;
+    } else {
+      const instance = await createFormInstance(formId, 'student', studentId);
+      instanceId = instance?.id ?? null;
+    }
     setSending(null);
-    if (instance) {
-      const secureUrl = await issueInstanceAccessLink(instance.id, 'student');
+    if (instanceId) {
+      const secureUrl = await issueInstanceAccessLink(instanceId, 'student');
       if (secureUrl) {
         await navigator.clipboard.writeText(secureUrl);
-        toast.success('Secure student form link copied! Share with student.');
+        toast.success(existing ? 'Student already has this form. New link copied.' : 'Secure student form link copied! Share with student.');
       } else {
         toast.error('Failed to create secure access link');
       }
     } else {
       toast.error('Failed to create form link');
+    }
+  };
+
+  const handleSendToBatch = async () => {
+    const formId = Number(sendToBatchFormId);
+    const batchId = Number(sendToBatchBatchId);
+    if (!formId || !batchId) {
+      toast.error('Select form and batch');
+      return;
+    }
+    setSendingBatch(true);
+    const batchStudents = await listStudentsInBatch(batchId);
+    let created = 0;
+    let skipped = 0;
+    for (const s of batchStudents) {
+      const existing = await getInstanceForStudentAndForm(formId, s.id);
+      if (existing) {
+        skipped++;
+      } else {
+        const inst = await createFormInstance(formId, 'student', s.id);
+        if (inst) created++;
+      }
+    }
+    setSendingBatch(false);
+    if (created > 0 || skipped > 0) {
+      const msg = skipped > 0
+        ? `Form sent to ${created} students. ${skipped} already had this form.`
+        : `Form sent to ${created} students.`;
+      toast.success(msg);
+    } else if (batchStudents.length === 0) {
+      toast.error('No students in this batch');
+    } else {
+      toast.error('Failed to send form');
     }
   };
 
@@ -149,6 +204,7 @@ export const AdminStudentsPage: React.FC = () => {
     first_name: string;
     last_name: string;
     phone: string;
+    batch_id: string;
   } | null>(null);
 
   useEffect(() => {
@@ -158,6 +214,7 @@ export const AdminStudentsPage: React.FC = () => {
         first_name: editingStudent.first_name ?? '',
         last_name: editingStudent.last_name ?? '',
         phone: editingStudent.phone ?? '',
+        batch_id: editingStudent.batch_id != null ? String(editingStudent.batch_id) : '',
       });
     } else {
       setEditForm(null);
@@ -171,6 +228,11 @@ export const AdminStudentsPage: React.FC = () => {
       toast.error(formError);
       return;
     }
+    const batchId = Number(editForm.batch_id);
+    if (!batchId || !Number.isFinite(batchId)) {
+      toast.error('Select a batch');
+      return;
+    }
     setSavingEdit(true);
     const updated = await updateStudent(editingId, {
       student_id: editForm.student_id,
@@ -178,6 +240,7 @@ export const AdminStudentsPage: React.FC = () => {
       last_name: editForm.last_name,
       phone: editForm.phone,
       email: buildStudentEmail(editForm.student_id),
+      batch_id: batchId,
     });
     setSavingEdit(false);
     if (updated) {
@@ -206,7 +269,10 @@ export const AdminStudentsPage: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-[var(--text)]">Students</h2>
-              <p className="text-sm text-gray-600 mt-1">Manage learner profiles and send form links from each row.</p>
+              <div className="text-sm text-gray-600 mt-1">
+              <p>Manage learner profiles and send form links. Students must be in a batch.</p>
+              {batches.length === 0 && <p className="text-amber-600 mt-1">Create batches first (Batches page).</p>}
+            </div>
             </div>
             <div className="flex items-center gap-2">
               <Input
@@ -218,11 +284,56 @@ export const AdminStudentsPage: React.FC = () => {
                 placeholder="Search by name, email, phone, city..."
                 className="w-full md:w-72"
               />
-              <Button onClick={() => setIsCreateOpen(true)} className="min-w-[160px]">
+              <Button onClick={() => setIsCreateOpen(true)} className="min-w-[160px]" disabled={batches.length === 0}>
                 <Plus className="w-4 h-4 mr-2 inline" />
                 Add Student
               </Button>
             </div>
+          </div>
+        </Card>
+
+        <Card className="mb-6">
+          <h3 className="text-base font-semibold text-[var(--text)] mb-3">Send form to batch</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Send a form to all students in a batch. Students who already have this form are skipped.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[200px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Form</label>
+              <Select
+                value={sendToBatchFormId}
+                onChange={(v) => setSendToBatchFormId(v)}
+                options={[{ value: '', label: 'Select form' }, ...formOptions]}
+                className="w-full"
+                portal
+              />
+            </div>
+            <div className="min-w-[200px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Batch</label>
+              <Select
+                value={sendToBatchBatchId}
+                onChange={(v) => setSendToBatchBatchId(v)}
+                options={[{ value: '', label: 'Select batch' }, ...batches.map((b) => ({ value: String(b.id), label: b.name }))]}
+                className="w-full"
+                portal
+              />
+            </div>
+            <Button
+              onClick={handleSendToBatch}
+              disabled={sendingBatch || !sendToBatchFormId || !sendToBatchBatchId || forms.length === 0 || batches.length === 0}
+            >
+              {sendingBatch ? (
+                <>
+                  <Loader variant="dots" size="sm" inline className="mr-2" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2 inline" />
+                  Send to batch
+                </>
+              )}
+            </Button>
           </div>
         </Card>
 
@@ -240,6 +351,7 @@ export const AdminStudentsPage: React.FC = () => {
                 <thead className="bg-gray-50 text-gray-700">
                   <tr>
                     <th className="text-left px-4 py-3 font-semibold border-b border-[var(--border)]">Student</th>
+                    <th className="text-left px-4 py-3 font-semibold border-b border-[var(--border)]">Batch</th>
                     <th className="text-left px-4 py-3 font-semibold border-b border-[var(--border)]">Contact</th>
                     <th className="text-left px-4 py-3 font-semibold border-b border-[var(--border)]">Form</th>
                     <th className="text-right px-4 py-3 font-semibold border-b border-[var(--border)]">Action</th>
@@ -260,6 +372,9 @@ export const AdminStudentsPage: React.FC = () => {
                             <div className="text-xs text-gray-500">Student ID: {student.student_id || '-'}</div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-4 py-3 border-b border-[var(--border)]">
+                        <span className="text-gray-700">{student.batch_name ?? '—'}</span>
                       </td>
                       <td className="px-4 py-3 border-b border-[var(--border)]">
                         <div className="space-y-1">
@@ -370,13 +485,26 @@ export const AdminStudentsPage: React.FC = () => {
               placeholder="Phone"
               required
             />
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">Batch *</label>
+              <Select
+                value={studentDraft.batch_id}
+                onChange={(v) => setStudentDraft((p) => ({ ...p, batch_id: v }))}
+                options={[
+                  { value: '', label: 'Select batch' },
+                  ...batches.map((b) => ({ value: String(b.id), label: b.name })),
+                ]}
+                className="w-full"
+                portal
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <Button variant="outline" size="sm" onClick={() => setIsCreateOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleCreate} disabled={creating || !!createFormError}>
+            <Button size="sm" onClick={handleCreate} disabled={creating || !!createFormError || !studentDraft.batch_id}>
               {creating ? (
                 <>
                   <Loader variant="dots" size="sm" inline className="mr-2" />
@@ -427,12 +555,25 @@ export const AdminStudentsPage: React.FC = () => {
                 placeholder="Phone"
                 required
               />
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Batch *</label>
+                <Select
+                  value={editForm.batch_id}
+                  onChange={(v) => setEditForm((p) => (p ? { ...p, batch_id: v } : p))}
+                  options={[
+                    { value: '', label: 'Select batch' },
+                    ...batches.map((b) => ({ value: String(b.id), label: b.name })),
+                  ]}
+                  className="w-full"
+                  portal
+                />
+              </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-1">
               <Button variant="outline" size="sm" onClick={() => setEditingId(null)}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleSaveEdit} disabled={savingEdit || !!editFormError}>
+              <Button size="sm" onClick={handleSaveEdit} disabled={savingEdit || !!editFormError || !editForm.batch_id}>
                 {savingEdit ? (
                   <>
                     <Loader variant="dots" size="sm" inline className="mr-2" />

@@ -560,6 +560,23 @@ export async function saveAnswer(
   }
 }
 
+/** Get existing instance for student+form (to avoid duplicate sends) */
+export async function getInstanceForStudentAndForm(
+  formId: number,
+  studentId: number
+): Promise<{ id: number } | null> {
+  const { data, error } = await supabase
+    .from('skyline_form_instances')
+    .select('id')
+    .eq('form_id', formId)
+    .eq('student_id', studentId)
+    .eq('role_context', 'student')
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return { id: Number((data as { id: number }).id) };
+}
+
 export async function createFormInstance(
   formId: number,
   roleContext: string,
@@ -727,6 +744,26 @@ export interface Trainer {
   created_at: string;
 }
 
+/** User with role (admin, trainer, office) for Users directory */
+export interface UserRow {
+  id: number;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  status: string | null;
+  role: string;
+  created_at: string;
+}
+
+export interface CreateUserInput {
+  full_name: string;
+  email: string;
+  phone?: string;
+  status?: string;
+  role: 'admin' | 'trainer' | 'office';
+  password?: string;
+}
+
 export interface CreateTrainerInput {
   full_name: string;
   email: string;
@@ -743,6 +780,81 @@ export interface PaginatedResult<T> {
   pageSize: number;
 }
 
+export type AppUserRole = 'admin' | 'trainer' | 'office';
+
+export interface AppUser {
+  id: number;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  status: string | null;
+  role: AppUserRole;
+}
+
+const AUTH_STORAGE_KEY = 'skyline_auth_user';
+
+export function getStoredUser(): AppUser | null {
+  try {
+    const s = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!s) return null;
+    const u = JSON.parse(s) as AppUser;
+    return u && u.id && u.email ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUser(user: AppUser | null): void {
+  if (user) {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+}
+
+export async function loginWithEmailPassword(email: string, password: string): Promise<AppUser | null> {
+  const { data, error } = await supabase.rpc('skyline_login', {
+    p_email: email.trim(),
+    p_password: password,
+  });
+  if (error) {
+    console.error('login error', error);
+    return null;
+  }
+  const rows = (data as Array<Record<string, unknown>>) || [];
+  const row = rows[0];
+  if (!row || !row.id) return null;
+  const user: AppUser = {
+    id: Number(row.id),
+    full_name: String(row.full_name ?? ''),
+    email: String(row.email ?? ''),
+    phone: row.phone ? String(row.phone) : null,
+    status: row.status ? String(row.status) : null,
+    role: (row.role as AppUserRole) ?? 'trainer',
+  };
+  return user;
+}
+
+export async function changePassword(
+  userId: number,
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> {
+  const { data, error } = await supabase.rpc('skyline_change_password', {
+    p_user_id: userId,
+    p_current_password: currentPassword,
+    p_new_password: newPassword,
+  });
+  if (error) {
+    console.error('changePassword error', error);
+    return { success: false, message: error.message || 'Failed to change password.' };
+  }
+  const rows = (data as Array<{ success: boolean; message: string }>) || [];
+  const row = rows[0];
+  if (!row) return { success: false, message: 'Unexpected response.' };
+  return { success: !!row.success, message: row.message || '' };
+}
+
 function mapTrainerRow(row: Record<string, unknown>): Trainer {
   return {
     id: Number(row.id),
@@ -754,9 +866,21 @@ function mapTrainerRow(row: Record<string, unknown>): Trainer {
   };
 }
 
+function mapUserRow(row: Record<string, unknown>): UserRow {
+  return {
+    id: Number(row.id),
+    full_name: String(row.full_name ?? ''),
+    email: String(row.email ?? ''),
+    phone: row.phone ? String(row.phone) : null,
+    status: row.status ? String(row.status) : null,
+    role: String(row.role ?? 'trainer'),
+    created_at: String(row.created_at ?? ''),
+  };
+}
+
 export async function listTrainers(): Promise<Trainer[]> {
   const { data, error } = await supabase
-    .from('skyline_trainers')
+    .from('skyline_users')
     .select('*')
     .order('created_at', { ascending: false });
   if (error) {
@@ -771,12 +895,31 @@ export async function listTrainersPaged(
   pageSize = 20,
   search?: string
 ): Promise<PaginatedResult<Trainer>> {
+  const res = await listUsersPaged(page, pageSize, search, undefined, undefined);
+  return {
+    data: res.data.map((u) => ({ id: u.id, full_name: u.full_name, email: u.email, phone: u.phone, status: u.status, created_at: u.created_at })),
+    total: res.total,
+    page: res.page,
+    pageSize: res.pageSize,
+  };
+}
+
+/** List users with optional role and status filters. */
+export async function listUsersPaged(
+  page = 1,
+  pageSize = 20,
+  search?: string,
+  roleFilter?: '' | 'admin' | 'trainer' | 'office',
+  statusFilter?: '' | 'active' | 'inactive'
+): Promise<PaginatedResult<UserRow>> {
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
   let query = supabase
-    .from('skyline_trainers')
+    .from('skyline_users')
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false });
+  if (roleFilter) query = query.eq('role', roleFilter);
+  if (statusFilter) query = query.eq('status', statusFilter);
   const q = (search ?? '').trim();
   if (q) {
     const escaped = q.replace(/[%_,]/g, '');
@@ -784,20 +927,35 @@ export async function listTrainersPaged(
   }
   const { data, error, count } = await query.range(from, to);
   if (error) {
-    console.error('listTrainersPaged error', error);
+    console.error('listUsersPaged error', error);
     return { data: [], total: 0, page, pageSize };
   }
   return {
-    data: ((data as Record<string, unknown>[]) || []).map(mapTrainerRow),
+    data: ((data as Record<string, unknown>[]) || []).map(mapUserRow),
     total: Number(count ?? 0),
     page,
     pageSize,
   };
 }
 
+/** Users who can be assigned as batch trainers (role trainer or admin, active). */
+export async function listUsersForBatchAssignment(): Promise<UserRow[]> {
+  const { data, error } = await supabase
+    .from('skyline_users')
+    .select('*')
+    .in('role', ['trainer', 'admin'])
+    .eq('status', 'active')
+    .order('full_name');
+  if (error) {
+    console.error('listUsersForBatchAssignment error', error);
+    return [];
+  }
+  return ((data as Record<string, unknown>[]) || []).map(mapUserRow);
+}
+
 export async function createTrainer(input: CreateTrainerInput): Promise<Trainer | null> {
   const { data, error } = await supabase
-    .from('skyline_trainers')
+    .from('skyline_users')
     .insert({
       full_name: input.full_name.trim(),
       email: input.email.trim(),
@@ -822,30 +980,74 @@ export async function createTrainer(input: CreateTrainerInput): Promise<Trainer 
 }
 
 export async function updateTrainer(id: number, input: UpdateTrainerInput): Promise<Trainer | null> {
+  const result = await updateUser(id, input);
+  return result ? { id: result.id, full_name: result.full_name, email: result.email, phone: result.phone, status: result.status, created_at: result.created_at } : null;
+}
+
+export type UpdateUserInput = Partial<Omit<CreateUserInput, 'password'>>;
+
+/** Create user with optional password (hashed server-side). */
+export async function createUser(input: CreateUserInput): Promise<UserRow | null> {
+  const { data, error } = await supabase.rpc('skyline_create_user', {
+    p_full_name: input.full_name.trim(),
+    p_email: input.email.trim(),
+    p_phone: input.phone?.trim() || null,
+    p_status: input.status?.trim() || 'active',
+    p_role: input.role,
+    p_password: input.password?.trim() || null,
+  });
+  if (error) {
+    console.error('createUser error', error);
+    return null;
+  }
+  const rows = (data as Record<string, unknown>[] | null) || [];
+  if (rows.length === 0) return null;
+  return mapUserRow(rows[0]);
+}
+
+/** Update user (name, email, phone, status, role). */
+export async function updateUser(id: number, input: UpdateUserInput): Promise<UserRow | null> {
   const payload: Record<string, unknown> = {};
   if (input.full_name !== undefined) payload.full_name = input.full_name.trim();
   if (input.email !== undefined) payload.email = input.email.trim();
   if (input.phone !== undefined) payload.phone = input.phone?.trim() || null;
   if (input.status !== undefined) payload.status = input.status?.trim() || null;
+  if (input.role !== undefined) payload.role = input.role;
   const { data, error } = await supabase
-    .from('skyline_trainers')
+    .from('skyline_users')
     .update(payload)
     .eq('id', id)
     .select('*')
     .single();
   if (error) {
-    console.error('updateTrainer error', error);
+    console.error('updateUser error', error);
     return null;
   }
   const row = data as Record<string, unknown>;
-  return {
-    id: Number(row.id),
-    full_name: String(row.full_name ?? ''),
-    email: String(row.email ?? ''),
-    phone: row.phone ? String(row.phone) : null,
-    status: row.status ? String(row.status) : null,
-    created_at: String(row.created_at ?? ''),
-  };
+  return mapUserRow(row);
+}
+
+/** Admin sets a user's password (no current password check). */
+export async function adminSetPassword(userId: number, newPassword: string): Promise<{ success: boolean; message: string }> {
+  const { data, error } = await supabase.rpc('skyline_admin_set_password', {
+    p_user_id: userId,
+    p_new_password: newPassword.trim(),
+  });
+  if (error) {
+    console.error('adminSetPassword error', error);
+    return { success: false, message: error.message };
+  }
+  const rows = (data as { success: boolean; message: string }[] | null) || [];
+  if (rows.length === 0) return { success: false, message: 'Unknown error' };
+  return { success: rows[0].success, message: rows[0].message };
+}
+
+export interface Batch {
+  id: number;
+  name: string;
+  trainer_id: number;
+  trainer_name: string | null;
+  created_at: string;
 }
 
 export interface Student {
@@ -856,6 +1058,8 @@ export interface Student {
   last_name: string | null;
   email: string;
   phone: string | null;
+  batch_id: number | null;
+  batch_name: string | null;
   date_of_birth: string | null;
   address_line_1: string | null;
   address_line_2: string | null;
@@ -882,6 +1086,8 @@ function mapStudentRow(row: Record<string, unknown>): Student {
     last_name: last || null,
     email: String(row.email ?? ''),
     phone: row.phone ? String(row.phone) : null,
+    batch_id: row.batch_id != null ? Number(row.batch_id) : null,
+    batch_name: row.batch_name != null ? String(row.batch_name) : null,
     date_of_birth: row.date_of_birth ? String(row.date_of_birth) : null,
     address_line_1: row.address_line_1 ? String(row.address_line_1) : null,
     address_line_2: row.address_line_2 ? String(row.address_line_2) : null,
@@ -913,16 +1119,35 @@ export interface SubmittedInstanceRow {
   link_expired: boolean;
 }
 
+export async function listStudentsInBatch(batchId: number): Promise<Student[]> {
+  const { data, error } = await supabase
+    .from('skyline_students')
+    .select('*, skyline_batches(name)')
+    .eq('batch_id', batchId)
+    .order('name');
+  if (error) {
+    console.error('listStudentsInBatch error', error);
+    return [];
+  }
+  return ((data as Record<string, unknown>[]) || []).map((r) => {
+    const batch = r.skyline_batches as { name?: string } | null;
+    return mapStudentRow({ ...r, batch_name: batch?.name ?? null });
+  });
+}
+
 export async function listStudents(): Promise<Student[]> {
   const { data, error } = await supabase
     .from('skyline_students')
-    .select('*')
+    .select('*, skyline_batches(name)')
     .order('created_at', { ascending: false });
   if (error) {
     console.error('listStudents error', error);
     return [];
   }
-  return ((data as Record<string, unknown>[]) || []).map(mapStudentRow);
+  return ((data as Record<string, unknown>[]) || []).map((r) => {
+    const batch = r.skyline_batches as { name?: string } | null;
+    return mapStudentRow({ ...r, batch_name: batch?.name ?? null });
+  });
 }
 
 export async function listStudentsPaged(
@@ -934,7 +1159,7 @@ export async function listStudentsPaged(
   const to = from + pageSize - 1;
   let query = supabase
     .from('skyline_students')
-    .select('*', { count: 'exact' })
+    .select('*, skyline_batches(name)', { count: 'exact' })
     .order('created_at', { ascending: false });
   const q = (search ?? '').trim();
   if (q) {
@@ -948,8 +1173,16 @@ export async function listStudentsPaged(
     console.error('listStudentsPaged error', error);
     return { data: [], total: 0, page, pageSize };
   }
+  const rows = (data as Record<string, unknown>[]) || [];
+  const mapped = rows.map((r) => {
+    const batch = r.skyline_batches as { name?: string } | null;
+    return mapStudentRow({
+      ...r,
+      batch_name: batch?.name ?? null,
+    });
+  });
   return {
-    data: ((data as Record<string, unknown>[]) || []).map(mapStudentRow),
+    data: mapped,
     total: Number(count ?? 0),
     page,
     pageSize,
@@ -1158,12 +1391,293 @@ export async function listSubmittedInstancesPaged(
   };
 }
 
+/** Get assessments for trainer (students in their batches) or office (all waiting office). */
+export async function listDashboardInstances(
+  role: 'trainer' | 'office',
+  userId: number,
+  page = 1,
+  pageSize = 20,
+  search?: string
+): Promise<PaginatedResult<SubmittedInstanceRow>> {
+  let studentIds: number[] = [];
+  if (role === 'trainer') {
+    const { data: batches } = await supabase
+      .from('skyline_batches')
+      .select('id')
+      .eq('trainer_id', userId);
+    const batchIds = ((batches as { id: number }[]) || []).map((b) => b.id);
+    if (batchIds.length === 0) return { data: [], total: 0, page, pageSize };
+    const { data: students } = await supabase
+      .from('skyline_students')
+      .select('id')
+      .in('batch_id', batchIds);
+    studentIds = ((students as { id: number }[]) || []).map((s) => s.id);
+    if (studentIds.length === 0) return { data: [], total: 0, page, pageSize };
+  }
+
+  const from = Math.max(0, (page - 1) * pageSize);
+  const to = from + pageSize - 1;
+  let query = supabase
+    .from('skyline_form_instances')
+    .select('id, form_id, student_id, status, role_context, created_at, submitted_at', { count: 'exact' })
+    .not('student_id', 'is', null)
+    .order('created_at', { ascending: false });
+
+  if (role === 'trainer') {
+    query = query.in('student_id', studentIds);
+    query = query.or('role_context.eq.trainer,role_context.eq.office,status.eq.locked');
+  } else {
+    query = query.or('role_context.eq.office,status.eq.locked');
+  }
+
+  const q = (search ?? '').trim();
+  if (q) {
+    const escaped = q.replace(/[%_,]/g, '');
+    const conditions: string[] = [`status.ilike.%${escaped}%`, `role_context.ilike.%${escaped}%`];
+    const { data: formRows } = await supabase
+      .from('skyline_forms')
+      .select('id')
+      .or(`name.ilike.%${escaped}%,version.ilike.%${escaped}%`);
+    const formIds = ((formRows as Array<Record<string, unknown>>) || []).map((f) => Number(f.id)).filter((n) => Number.isFinite(n) && n > 0);
+    if (formIds.length > 0) conditions.push(`form_id.in.(${formIds.join(',')})`);
+    const { data: studentRows } = await supabase
+      .from('skyline_students')
+      .select('id')
+      .or(`student_id.ilike.%${escaped}%,name.ilike.%${escaped}%,first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,email.ilike.%${escaped}%`);
+    const searchStudentIds = ((studentRows as Array<Record<string, unknown>>) || []).map((s) => Number(s.id)).filter((n) => Number.isFinite(n) && n > 0);
+    if (searchStudentIds.length > 0) {
+      if (role === 'trainer') {
+        const overlap = studentIds.filter((id) => searchStudentIds.includes(id));
+        if (overlap.length === 0) return { data: [], total: 0, page, pageSize };
+        conditions.push(`student_id.in.(${overlap.join(',')})`);
+      } else {
+        conditions.push(`student_id.in.(${searchStudentIds.join(',')})`);
+      }
+    }
+    query = query.or(conditions.join(','));
+  }
+
+  const { data: instances, error, count } = await query.range(from, to);
+  if (error) {
+    console.error('listDashboardInstances error', error);
+    return { data: [], total: 0, page, pageSize };
+  }
+
+  const rows = (instances as Array<Record<string, unknown>>) || [];
+  const instanceIds = rows.map((r) => Number(r.id)).filter((n) => Number.isFinite(n) && n > 0);
+  const formIds = Array.from(new Set(rows.map((r) => Number(r.form_id)).filter((n) => Number.isFinite(n) && n > 0)));
+  const sIds = Array.from(new Set(rows.map((r) => Number(r.student_id)).filter((n) => Number.isFinite(n) && n > 0)));
+
+  const now = Date.now();
+  const tokenMap = new Map<string, boolean>();
+  if (instanceIds.length > 0) {
+    const { data: tokens } = await supabase
+      .from('skyline_instance_access_tokens')
+      .select('instance_id, role_context, expires_at, revoked_at')
+      .in('instance_id', instanceIds);
+    for (const t of (tokens as Array<{ instance_id: number; role_context: string; expires_at: string; revoked_at: string | null }>) || []) {
+      const key = `${t.instance_id}:${t.role_context}`;
+      const valid = t.revoked_at == null && t.expires_at && new Date(t.expires_at).getTime() > now;
+      if (valid) tokenMap.set(key, false);
+      else if (!tokenMap.has(key)) tokenMap.set(key, true);
+    }
+  }
+
+  const formMap = new Map<number, { name: string; version: string | null }>();
+  if (formIds.length > 0) {
+    const { data: forms } = await supabase.from('skyline_forms').select('id, name, version').in('id', formIds);
+    for (const f of (forms as Array<Record<string, unknown>>) || []) {
+      formMap.set(Number(f.id), { name: String(f.name ?? ''), version: f.version ? String(f.version) : null });
+    }
+  }
+  const studentMap = new Map<number, { name: string; email: string }>();
+  if (sIds.length > 0) {
+    const { data: students } = await supabase
+      .from('skyline_students')
+      .select('id, name, first_name, last_name, email')
+      .in('id', sIds);
+    for (const s of (students as Array<Record<string, unknown>>) || []) {
+      const first = String(s.first_name ?? '').trim();
+      const last = String(s.last_name ?? '').trim();
+      const name = [first, last].filter(Boolean).join(' ').trim() || String(s.name ?? '');
+      studentMap.set(Number(s.id), { name, email: String(s.email ?? '') });
+    }
+  }
+
+  const targetRole = role === 'trainer' ? 'trainer' : 'office';
+  return {
+    data: rows.map((r) => {
+      const formId = Number(r.form_id);
+      const studentId = r.student_id == null ? null : Number(r.student_id);
+      const form = formMap.get(formId);
+      const student = studentId != null ? studentMap.get(studentId) : undefined;
+      const roleCtx = String(r.role_context ?? 'student');
+      const link_expired = tokenMap.get(`${Number(r.id)}:${targetRole}`) !== false;
+      return {
+        id: Number(r.id),
+        form_id: formId,
+        form_name: form?.name || `Form #${formId}`,
+        form_version: form?.version ?? null,
+        student_id: studentId,
+        student_name: student?.name || 'Unknown student',
+        student_email: student?.email || '',
+        status: String(r.status ?? 'draft'),
+        role_context: roleCtx,
+        created_at: String(r.created_at ?? ''),
+        submitted_at: r.submitted_at ? String(r.submitted_at) : null,
+        link_expired,
+      };
+    }),
+    total: Number(count ?? 0),
+    page,
+    pageSize,
+  };
+}
+
+/** Pending count for dashboard: trainer = waiting_trainer in their batches, office = waiting_office. */
+export async function getDashboardPendingCount(role: 'trainer' | 'office', userId: number): Promise<number> {
+  if (role === 'trainer') {
+    const { data: batches } = await supabase.from('skyline_batches').select('id').eq('trainer_id', userId);
+    const batchIds = ((batches as { id: number }[]) || []).map((b) => b.id);
+    if (batchIds.length === 0) return 0;
+    const { data: students } = await supabase.from('skyline_students').select('id').in('batch_id', batchIds);
+    const studentIds = ((students as { id: number }[]) || []).map((s) => s.id);
+    if (studentIds.length === 0) return 0;
+    const { count } = await supabase
+      .from('skyline_form_instances')
+      .select('id', { count: 'exact', head: true })
+      .in('student_id', studentIds)
+      .eq('role_context', 'trainer')
+      .neq('status', 'locked');
+    return Number(count ?? 0);
+  }
+  const { count } = await supabase
+    .from('skyline_form_instances')
+    .select('id', { count: 'exact', head: true })
+    .eq('role_context', 'office')
+    .neq('status', 'locked')
+    .not('student_id', 'is', null);
+  return Number(count ?? 0);
+}
+
+export interface CreateBatchInput {
+  name: string;
+  trainer_id: number;
+}
+
+export async function listBatches(): Promise<Batch[]> {
+  const { data, error } = await supabase
+    .from('skyline_batches')
+    .select('id, name, trainer_id, created_at')
+    .order('name', { ascending: true });
+  if (error) {
+    console.error('listBatches error', error);
+    return [];
+  }
+  const rows = (data as Record<string, unknown>[]) || [];
+  if (rows.length === 0) return rows.map((r) => mapBatchRow(r, null));
+  const trainerIds = [...new Set(rows.map((r) => Number(r.trainer_id)).filter(Boolean))];
+  const trainerMap = new Map<number, string>();
+  if (trainerIds.length > 0) {
+    const { data: trainers } = await supabase
+      .from('skyline_users')
+      .select('id, full_name')
+      .in('id', trainerIds);
+    for (const t of (trainers as { id: number; full_name: string }[]) || []) {
+      trainerMap.set(t.id, t.full_name ?? '');
+    }
+  }
+  return rows.map((r) => mapBatchRow(r, trainerMap.get(Number(r.trainer_id)) ?? null));
+}
+
+function mapBatchRow(row: Record<string, unknown>, trainerName: string | null): Batch {
+  return {
+    id: Number(row.id),
+    name: String(row.name ?? ''),
+    trainer_id: Number(row.trainer_id),
+    trainer_name: trainerName,
+    created_at: String(row.created_at ?? ''),
+  };
+}
+
+export async function createBatch(input: CreateBatchInput): Promise<Batch | null> {
+  const { data, error } = await supabase
+    .from('skyline_batches')
+    .insert({
+      name: input.name.trim(),
+      trainer_id: input.trainer_id,
+    })
+    .select('id, name, trainer_id, created_at')
+    .single();
+  if (error) {
+    console.error('createBatch error', error);
+    return null;
+  }
+  const row = data as Record<string, unknown>;
+  let trainerName: string | null = null;
+  const { data: t } = await supabase
+    .from('skyline_users')
+    .select('full_name')
+    .eq('id', row.trainer_id)
+    .single();
+  if (t && typeof t === 'object' && 'full_name' in t) trainerName = String((t as { full_name: string }).full_name ?? '');
+  return mapBatchRow(row, trainerName);
+}
+
+export type UpdateBatchInput = Partial<Pick<CreateBatchInput, 'name' | 'trainer_id'>>;
+
+export async function updateBatch(id: number, input: UpdateBatchInput): Promise<Batch | null> {
+  const payload: Record<string, unknown> = {};
+  if (input.name !== undefined) payload.name = input.name.trim();
+  if (input.trainer_id !== undefined) payload.trainer_id = input.trainer_id;
+  const { data, error } = await supabase
+    .from('skyline_batches')
+    .update(payload)
+    .eq('id', id)
+    .select('id, name, trainer_id, created_at')
+    .single();
+  if (error) {
+    console.error('updateBatch error', error);
+    return null;
+  }
+  const row = data as Record<string, unknown>;
+  let trainerName: string | null = null;
+  const { data: t } = await supabase
+    .from('skyline_users')
+    .select('full_name')
+    .eq('id', row.trainer_id)
+    .single();
+  if (t && typeof t === 'object' && 'full_name' in t) trainerName = String((t as { full_name: string }).full_name ?? '');
+  return mapBatchRow(row, trainerName);
+}
+
+export async function updateBatchStudentAssignments(batchId: number, studentIds: number[]): Promise<boolean> {
+  try {
+    await supabase.from('skyline_students').update({ batch_id: null }).eq('batch_id', batchId);
+    if (studentIds.length > 0) {
+      const { error } = await supabase
+        .from('skyline_students')
+        .update({ batch_id: batchId })
+        .in('id', studentIds);
+      if (error) {
+        console.error('updateBatchStudentAssignments assign error', error);
+        return false;
+      }
+    }
+    return true;
+  } catch (e) {
+    console.error('updateBatchStudentAssignments error', e);
+    return false;
+  }
+}
+
 export interface CreateStudentInput {
   student_id: string;
   first_name: string;
   last_name?: string;
   email: string;
   phone?: string;
+  batch_id: number;
   date_of_birth?: string;
   address_line_1?: string;
   address_line_2?: string;
@@ -1190,6 +1704,7 @@ export async function createStudent(input: CreateStudentInput): Promise<Student 
       last_name: last || null,
       email: input.email.trim(),
       phone: input.phone?.trim() || null,
+      batch_id: input.batch_id,
       date_of_birth: input.date_of_birth?.trim() || null,
       address_line_1: input.address_line_1?.trim() || null,
       address_line_2: input.address_line_2?.trim() || null,
@@ -1219,6 +1734,8 @@ export async function createStudent(input: CreateStudentInput): Promise<Student 
     last_name: lastName || null,
     email: String(row.email ?? ''),
     phone: row.phone ? String(row.phone) : null,
+    batch_id: row.batch_id != null ? Number(row.batch_id) : null,
+    batch_name: null,
     date_of_birth: row.date_of_birth ? String(row.date_of_birth) : null,
     address_line_1: row.address_line_1 ? String(row.address_line_1) : null,
     address_line_2: row.address_line_2 ? String(row.address_line_2) : null,
@@ -1249,6 +1766,7 @@ export async function updateStudent(id: number, input: UpdateStudentInput): Prom
   if (input.email !== undefined) payload.email = input.email.trim();
   if (input.student_id !== undefined) payload.student_id = input.student_id?.trim() || null;
   if (input.phone !== undefined) payload.phone = input.phone?.trim() || null;
+  if (input.batch_id !== undefined) payload.batch_id = input.batch_id;
   if (input.date_of_birth !== undefined) payload.date_of_birth = input.date_of_birth?.trim() || null;
   if (input.address_line_1 !== undefined) payload.address_line_1 = input.address_line_1?.trim() || null;
   if (input.address_line_2 !== undefined) payload.address_line_2 = input.address_line_2?.trim() || null;
@@ -1264,13 +1782,14 @@ export async function updateStudent(id: number, input: UpdateStudentInput): Prom
     .from('skyline_students')
     .update(payload)
     .eq('id', id)
-    .select('*')
+    .select('*, skyline_batches(name)')
     .single();
   if (error) {
     console.error('updateStudent error', error);
     return null;
   }
   const row = data as Record<string, unknown>;
+  const batch = row.skyline_batches as { name?: string } | null;
   const firstName = String(row.first_name ?? '').trim();
   const lastName = String(row.last_name ?? '').trim();
   return {
@@ -1281,6 +1800,8 @@ export async function updateStudent(id: number, input: UpdateStudentInput): Prom
     last_name: lastName || null,
     email: String(row.email ?? ''),
     phone: row.phone ? String(row.phone) : null,
+    batch_id: row.batch_id != null ? Number(row.batch_id) : null,
+    batch_name: batch?.name ?? null,
     date_of_birth: row.date_of_birth ? String(row.date_of_birth) : null,
     address_line_1: row.address_line_1 ? String(row.address_line_1) : null,
     address_line_2: row.address_line_2 ? String(row.address_line_2) : null,

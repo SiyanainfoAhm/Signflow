@@ -445,6 +445,7 @@ export const InstanceFillPage: React.FC = () => {
     setWorkflowSubmitting(true);
     if (role === 'student' && workflowStatus === 'draft') {
       await updateInstanceWorkflowStatus(id, 'waiting_trainer');
+      await updateInstanceRole(id, 'trainer');
       setWorkflowStatus('waiting_trainer');
       toast.success('Submitted successfully. Waiting for trainer checking.');
       setWorkflowSubmitting(false);

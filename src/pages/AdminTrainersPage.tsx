@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Mail, Phone, Pencil } from 'lucide-react';
-import { listTrainersPaged, createTrainer, updateTrainer } from '../lib/formEngine';
+import { listTrainersPaged, createTrainer, updateTrainer, listBatches } from '../lib/formEngine';
 import type { Trainer } from '../lib/formEngine';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -35,6 +35,11 @@ export const AdminTrainersPage: React.FC = () => {
     phone: string;
     status: string;
   } | null>(null);
+  const [batches, setBatches] = useState<{ id: number; name: string; trainer_id: number }[]>([]);
+
+  useEffect(() => {
+    listBatches().then((b) => setBatches(b));
+  }, []);
 
   const digitsOnly = (val: string) => val.replace(/\D/g, '');
 
@@ -129,7 +134,9 @@ export const AdminTrainersPage: React.FC = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-[var(--text)]">Trainers</h2>
-              <p className="text-sm text-gray-600 mt-1">Manage trainer directory for secure assignment links and email workflows.</p>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage trainer directory. Batches are assigned to trainers on the Batches page.
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Input
@@ -164,6 +171,7 @@ export const AdminTrainersPage: React.FC = () => {
                   <tr>
                     <th className="text-left px-4 py-3 font-semibold border-b border-[var(--border)]">Trainer</th>
                     <th className="text-left px-4 py-3 font-semibold border-b border-[var(--border)]">Contact</th>
+                    <th className="text-left px-4 py-3 font-semibold border-b border-[var(--border)]">Batches</th>
                     <th className="text-left px-4 py-3 font-semibold border-b border-[var(--border)]">Status</th>
                     <th className="text-right px-4 py-3 font-semibold border-b border-[var(--border)]">Action</th>
                   </tr>
@@ -192,6 +200,23 @@ export const AdminTrainersPage: React.FC = () => {
                             <Phone className="w-4 h-4 text-gray-400" />
                             <span>{trainer.phone || '-'}</span>
                           </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 border-b border-[var(--border)]">
+                        <div className="flex flex-wrap gap-1">
+                          {batches
+                            .filter((b) => b.trainer_id === trainer.id)
+                            .map((b) => (
+                              <span
+                                key={b.id}
+                                className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700"
+                              >
+                                {b.name}
+                              </span>
+                            ))}
+                          {batches.filter((b) => b.trainer_id === trainer.id).length === 0 && (
+                            <span className="text-gray-400 text-xs">—</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 border-b border-[var(--border)]">
