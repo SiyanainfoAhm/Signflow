@@ -405,15 +405,24 @@ export function buildHtml(data: {
     .task-q-question-box .task-questions-table .task-q-inner-table th,
     .task-q-question-box .task-questions-table .task-q-inner-table td { border-color: #595959 !important; }
     .task-questions-table { border: none !important; margin: 0 !important; }
-    .task-questions-table .task-q-num-cell { background: #fff !important; border: 1px solid #595959 !important; padding: 12px !important; vertical-align: top !important; font-weight: bold; font-size: 11pt; width: 5%; }
-    .task-questions-table .task-q-question-cell { background: #fff !important; border: 1px solid #595959 !important; border-left: none !important; padding: 12px !important; vertical-align: top !important; }
+    .task-q-question-box .task-questions-table .task-q-num-cell { border: 1px solid #000 !important; border-color: #000 !important; }
+    .task-q-question-box .task-questions-table .task-q-satisfactory-cell { border: 1px solid #000 !important; border-left: none !important; border-color: #000 !important; }
+    .task-questions-table .task-q-num-cell { background: #fff !important; padding: 24px 12px 12px 12px !important; vertical-align: top !important; font-weight: bold; font-size: 11pt; width: 5%; }
+    .task-q-question-box .task-questions-table .task-q-question-cell,
+    .task-q-question-box .task-questions-table .task-q-question-label-cell,
+    .task-q-question-box .task-questions-table .task-q-answer-cell { border: 1px solid #000 !important; border-left: none !important; border-color: #000 !important; }
+    .task-questions-table .task-q-question-cell,
+    .task-questions-table .task-q-question-label-cell,
+    .task-questions-table .task-q-answer-cell { background: #fff !important; padding: 24px 12px 12px 12px !important; vertical-align: top !important; }
+    .task-questions-table .task-q-cell-lower { padding: 12px !important; vertical-align: top !important; }
+    .task-questions-table .task-q-answer-cell .task-q-answer-block { border-top: none !important; }
     .task-questions-table .task-q-question-label { font-weight: bold; font-size: 11pt; margin-bottom: 8px; color: #000; white-space: pre-line; }
     .task-q-text-above-header { font-weight: bold; font-size: 11pt; margin-bottom: 8px; color: #000; }
     .task-q-content-block, .task-q-additional-grid { width: 100%; max-width: 100%; box-sizing: border-box; }
     .task-q-additional-grid table { min-width: 0; width: 100% !important; table-layout: fixed !important; }
-    .task-questions-table .task-q-satisfactory-cell { background: #fff !important; border: 1px solid #595959 !important; border-left: none !important; padding: 12px !important; vertical-align: top !important; text-align: right; width: 25%; }
-    .task-questions-table .task-q-satisfactory-header { font-weight: bold; font-size: 10pt; margin-bottom: 6px; }
-    .task-questions-table .task-q-satisfactory-cell .task-q-radio-group { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 16px; }
+    .task-questions-table .task-q-satisfactory-cell { background: #fff !important; padding: 24px 12px 12px 12px !important; vertical-align: top !important; text-align: center; width: 25%; }
+    .task-questions-table .task-q-satisfactory-header { font-weight: bold; font-size: 10pt; margin-bottom: 8px; }
+    .task-questions-table .task-q-satisfactory-cell .task-q-radio-group { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 16px; }
     .task-questions-table .task-q-radio { display: inline-flex; align-items: center; gap: 6px; }
     .task-questions-table .task-q-radio .radio-circle { width: 12px; height: 12px; border: 1.5px solid #374151; border-radius: 50%; flex-shrink: 0; }
     .task-questions-table .task-q-radio .radio-circle.filled { background: #000; border-color: #000; }
@@ -958,13 +967,22 @@ export function buildHtml(data: {
           const boxClass = 'task-q-question-box' + (nextIsPageBreak ? ' page-break-after' : '');
           html += `<div class="${boxClass}">`;
           html += '<table class="section-table task-questions-table"><tbody>';
-          html += '<tr class="task-q-question-row">';
+          html += '<tr class="task-q-row-top">';
           html += `<td class="task-q-num-cell">Q${qNum}:</td>`;
-          html += '<td class="task-q-question-cell">';
+          html += '<td class="task-q-question-label-cell">';
           html += `<div class="task-q-question-label">${question.label}</div>`;
           const pmTop = (question.pdf_meta as Record<string, unknown>) || {};
           const textAboveHeader = String(pmTop.textAboveHeader ?? '').trim();
           if (textAboveHeader) html += `<div class="task-q-text-above-header">${textAboveHeader}</div>`;
+          html += '</td>';
+          html += '<td class="task-q-satisfactory-cell">';
+          html += '<div class="task-q-satisfactory-header">Satisfactory response</div>';
+          html += '<div class="task-q-radio-group"><div class="task-q-radio"><span class="radio-circle' + (satYes ? ' filled' : '') + '"></span>Yes</div>';
+          html += '<div class="task-q-radio"><span class="radio-circle' + (satNo ? ' filled' : '') + '"></span>No</div></div>';
+          html += '</td></tr>';
+          html += '<tr class="task-q-row-bottom">';
+          html += '<td class="task-q-num-cell task-q-cell-lower">&nbsp;</td>';
+          html += '<td class="task-q-answer-cell">';
           if (isGridTable) {
             const pm = (question.pdf_meta as Record<string, unknown>) || {};
             const cols = (Array.isArray(pm.columns) ? pm.columns : ['Column 1', 'Column 2']) as string[];
@@ -1087,11 +1105,8 @@ export function buildHtml(data: {
             }
           }
           html += '</td>';
-          html += '<td class="task-q-satisfactory-cell">';
-          html += '<div class="task-q-satisfactory-header">Satisfactory response</div>';
-          html += '<div class="task-q-radio-group"><div class="task-q-radio"><span class="radio-circle' + (satYes ? ' filled' : '') + '"></span>Yes</div>';
-          html += '<div class="task-q-radio"><span class="radio-circle' + (satNo ? ' filled' : '') + '"></span>No</div></div>';
-          html += '</td></tr>';
+          html += '<td class="task-q-satisfactory-cell task-q-cell-lower">&nbsp;</td>';
+          html += '</tr>';
           html += '</tbody></table>';
           html += '</div>';
         }
