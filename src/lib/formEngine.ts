@@ -525,6 +525,36 @@ export async function saveTrainerAssessment(
   if (error) console.error('saveTrainerAssessment error', error);
 }
 
+/** Per-row satisfactory for Assessment Task 2+ grid_table questions. Key: `q-${questionId}-${rowId}` */
+export async function fetchTrainerRowAssessments(instanceId: number): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from('skyline_form_trainer_row_assessments')
+    .select('question_id, row_id, satisfactory')
+    .eq('instance_id', instanceId);
+  if (error) {
+    console.error('fetchTrainerRowAssessments error', error);
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const row of (data as { question_id: number; row_id: number; satisfactory: string | null }[]) || []) {
+    if (row.satisfactory) out[`q-${row.question_id}-${row.row_id}`] = row.satisfactory;
+  }
+  return out;
+}
+
+export async function saveTrainerRowAssessment(
+  instanceId: number,
+  questionId: number,
+  rowId: number,
+  satisfactory: 'yes' | 'no'
+): Promise<void> {
+  const { error } = await supabase.from('skyline_form_trainer_row_assessments').upsert(
+    { instance_id: instanceId, question_id: questionId, row_id: rowId, satisfactory, updated_at: new Date().toISOString() },
+    { onConflict: 'instance_id,question_id,row_id' }
+  );
+  if (error) console.error('saveTrainerRowAssessment error', error);
+}
+
 export async function saveAnswer(
   instanceId: number,
   questionId: number,

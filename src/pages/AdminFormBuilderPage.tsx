@@ -104,33 +104,28 @@ function getGridColumnsMeta(pm: Record<string, unknown>): GridTableColumnMeta[] 
       .map((entry) => {
         if (!entry || typeof entry !== 'object') return null;
         const e = entry as Record<string, unknown>;
-        const label = String(e.label ?? '').trim();
-        if (!label) return null;
+        const label = String(e.label ?? '');
         return { label, type: normalizeGridColumnType(e.type) } as GridTableColumnMeta;
       })
-      .filter(Boolean) as GridTableColumnMeta[];
+      .filter((e) => e != null) as GridTableColumnMeta[];
     if (parsed.length > 0) return parsed;
   }
 
   const columns = Array.isArray(pm.columns) ? (pm.columns as unknown[]) : ['Column 1', 'Column 2'];
   const types = Array.isArray(pm.columnTypes) ? (pm.columnTypes as unknown[]) : [];
   return columns
-    .map((c, idx) => {
-      const label = String(c ?? '').trim();
-      if (!label) return null;
-      return {
-        label,
-        type: normalizeGridColumnType(types[idx]),
-      } as GridTableColumnMeta;
-    })
-    .filter(Boolean) as GridTableColumnMeta[];
+    .map((c, idx) => ({
+      label: String(c ?? ''),
+      type: normalizeGridColumnType(types[idx]),
+    })) as GridTableColumnMeta[];
 }
 
 function withGridColumnsMeta(pm: Record<string, unknown>, columnsMeta: GridTableColumnMeta[]): Json {
   const existingLimitsRaw = Array.isArray(pm.columnWordLimits) ? (pm.columnWordLimits as unknown[]) : [];
-  const normalized = columnsMeta
-    .map((c) => ({ label: String(c.label || '').trim(), type: normalizeGridColumnType(c.type) }))
-    .filter((c) => c.label.length > 0);
+  const normalized = columnsMeta.map((c) => ({
+    label: String(c.label ?? ''),
+    type: normalizeGridColumnType(c.type),
+  }));
   return {
     ...pm,
     columnsMeta: normalized,
@@ -474,13 +469,21 @@ function SortableQuestionItem({
   isSelected,
   onSelect,
   onRemove,
+  onDuplicate,
   canDelete = true,
+  menuOpen,
+  onMenuToggle,
+  menuRef,
 }: {
   question: FormQuestion;
   isSelected: boolean;
   onSelect: () => void;
   onRemove: () => void;
+  onDuplicate: () => void;
   canDelete?: boolean;
+  menuOpen: boolean;
+  onMenuToggle: () => void;
+  menuRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `question-${question.id}` });
 
@@ -513,6 +516,40 @@ function SortableQuestionItem({
       <div className="flex-1 min-w-0 truncate">
         {question.label || question.type}
       </div>
+      <div ref={menuRef} className="relative shrink-0">
+        <button
+          type="button"
+          data-question-menu-trigger
+          className="p-0.5 rounded hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => {
+            e.stopPropagation();
+            onMenuToggle();
+          }}
+          aria-label="More options"
+        >
+          <MoreVertical className="w-4 h-4 text-gray-500" />
+        </button>
+        {menuOpen && (
+          <div
+            className="absolute right-0 top-full mt-0.5 z-20 min-w-[120px] rounded-md border border-[var(--border)] bg-white py-1 shadow-lg"
+            role="menu"
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--text)] hover:bg-gray-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate();
+                onMenuToggle();
+              }}
+              role="menuitem"
+            >
+              <Copy className="w-4 h-4" />
+              Duplicate
+            </button>
+          </div>
+        )}
+      </div>
       {canDelete && (
         <button
           type="button"
@@ -544,8 +581,10 @@ export const AdminFormBuilderPage: React.FC = () => {
   const [assessmentTaskRows, setAssessmentTaskRows] = useState<AssessmentTaskRow[]>([]);
   const [openStepMenuId, setOpenStepMenuId] = useState<number | null>(null);
   const [openSectionMenuId, setOpenSectionMenuId] = useState<number | null>(null);
+  const [openQuestionMenuId, setOpenQuestionMenuId] = useState<number | null>(null);
   const stepMenuRef = useRef<HTMLDivElement | null>(null);
   const sectionMenuRef = useRef<HTMLDivElement | null>(null);
+  const questionMenuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const coverInputRef = React.useRef<HTMLInputElement>(null);
   const lastSavedFormNameRef = useRef<string>('');
@@ -604,6 +643,18 @@ export const AdminFormBuilderPage: React.FC = () => {
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, [openSectionMenuId]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-question-menu-trigger]')) return;
+      if (openQuestionMenuId !== null && questionMenuRef.current && !questionMenuRef.current.contains(target)) {
+        setOpenQuestionMenuId(null);
+      }
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openQuestionMenuId]);
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1147,6 +1198,70 @@ export const AdminFormBuilderPage: React.FC = () => {
     }
   };
 
+  const duplicateQuestion = async (questionId: number) => {
+    if (!selectedSectionId || !selectedSection) return;
+    const q = selectedSection.questions.find((x) => x.id === questionId);
+    if (!q) return;
+    const newSortOrder = (q.sort_order ?? 0) + 1;
+    for (const other of selectedSection.questions) {
+      if ((other.sort_order ?? 0) >= newSortOrder) {
+        await supabase.from('skyline_form_questions').update({ sort_order: (other.sort_order ?? 0) + 1 }).eq('id', other.id);
+      }
+    }
+    const { data: newQ } = await supabase
+      .from('skyline_form_questions')
+      .insert({
+        section_id: selectedSectionId,
+        type: q.type,
+        code: q.code,
+        label: `${(q.label || q.type || 'Question').replace(/\s*\(Copy\)\s*$/, '')} (Copy)`,
+        help_text: q.help_text,
+        required: q.required ?? false,
+        sort_order: newSortOrder,
+        role_visibility: q.role_visibility ?? {},
+        role_editability: q.role_editability ?? {},
+        pdf_meta: q.pdf_meta ?? {},
+      })
+      .select('*')
+      .single();
+    if (!newQ) return;
+    const { data: opts } = await supabase.from('skyline_form_question_options').select('*').eq('question_id', q.id).order('sort_order');
+    if ((opts as { value: string; label: string; sort_order: number }[])?.length) {
+      await supabase.from('skyline_form_question_options').insert(
+        (opts as { value: string; label: string; sort_order: number }[]).map((o) => ({
+          question_id: (newQ as FormQuestion).id,
+          value: o.value,
+          label: o.label,
+          sort_order: o.sort_order,
+        }))
+      );
+    }
+    const { data: rows } = await supabase.from('skyline_form_question_rows').select('*').eq('question_id', q.id).order('sort_order');
+    for (const r of (rows as { row_label: string; row_help: string | null; row_image_url: string | null; row_meta: unknown; sort_order: number }[]) || []) {
+      await supabase.from('skyline_form_question_rows').insert({
+        question_id: (newQ as FormQuestion).id,
+        row_label: r.row_label,
+        row_help: r.row_help,
+        row_image_url: r.row_image_url,
+        row_meta: r.row_meta,
+        sort_order: r.sort_order,
+      });
+    }
+    const nextQuestions = [...selectedSection.questions];
+    const insertAt = nextQuestions.findIndex((x) => x.id === questionId) + 1;
+    nextQuestions.splice(insertAt, 0, newQ as FormQuestion);
+    setSteps((prev) =>
+      prev.map((s) => ({
+        ...s,
+        sections: s.sections.map((sec) =>
+          sec.id === selectedSectionId ? { ...sec, questions: nextQuestions } : sec
+        ),
+      }))
+    );
+    setEditingQuestionId((newQ as FormQuestion).id);
+    setOpenQuestionMenuId(null);
+  };
+
   const createContentBlockQuestion = async (
     parentQuestion: FormQuestion,
     blockType: ContentBlockType,
@@ -1553,7 +1668,11 @@ export const AdminFormBuilderPage: React.FC = () => {
                           isSelected={editingQuestionId === q.id}
                           onSelect={() => setEditingQuestionId(q.id)}
                           onRemove={() => removeQuestion(q.id)}
+                          onDuplicate={() => duplicateQuestion(q.id)}
                           canDelete={!isPrebuiltQuestion(q)}
+                          menuOpen={openQuestionMenuId === q.id}
+                          onMenuToggle={() => setOpenQuestionMenuId(openQuestionMenuId === q.id ? null : q.id)}
+                          menuRef={questionMenuRef}
                         />
                       ))}
                     </div>
@@ -1712,7 +1831,7 @@ export const AdminFormBuilderPage: React.FC = () => {
                                 pdf_meta: { ...pm, firstColumnLabel: e.target.value },
                               })
                             }
-                            placeholder="e.g. Shape, Name, Item"
+                            placeholder="e.g. Shape, Name, Item (spaces and commas allowed)"
                           />
                         )}
                         {layout === 'split' && (
@@ -1725,7 +1844,7 @@ export const AdminFormBuilderPage: React.FC = () => {
                                   pdf_meta: { ...pm, firstColumnLabel: e.target.value },
                                 })
                               }
-                              placeholder="e.g. Polygon Name, Measurement"
+                              placeholder="e.g. Polygon Name, Measurement (spaces and commas allowed)"
                             />
                             <Input
                               label="2nd column header"
@@ -1735,7 +1854,7 @@ export const AdminFormBuilderPage: React.FC = () => {
                                   pdf_meta: { ...pm, secondColumnLabel: e.target.value },
                                 })
                               }
-                              placeholder="e.g. Polygon Shape, Diagram"
+                              placeholder="e.g. Polygon Shape, Diagram (spaces and commas allowed)"
                             />
                           </div>
                         )}
@@ -1756,6 +1875,7 @@ export const AdminFormBuilderPage: React.FC = () => {
                                         next[colIdx] = { ...next[colIdx], label: e.target.value };
                                         updateQuestion(q.id, { pdf_meta: withGridColumnsMeta(pm, next) });
                                       }}
+                                      placeholder="e.g. Activity, Required items (spaces allowed)"
                                     />
                                   )}
                                 </div>
@@ -1874,7 +1994,7 @@ export const AdminFormBuilderPage: React.FC = () => {
                                   </div>
                                   <Input
                                     label="Hint text above block (optional, bold)"
-                                    value={String(block.headerText ?? '').trim()}
+                                    value={String(block.headerText ?? '')}
                                     onChange={(e) => updateBlock(idx, { headerText: e.target.value || undefined })}
                                     placeholder="e.g. Painting terminology:"
                                   />

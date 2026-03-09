@@ -29,6 +29,10 @@ interface QuestionRendererProps {
   disabled?: boolean;
   error?: string;
   declarationStyle?: boolean;
+  /** For Assessment Task 2+ grid_table: show per-row check/cancel */
+  showRowAssessmentColumn?: boolean;
+  rowAssessments?: Record<number, string>;
+  onRowAssessmentChange?: (rowId: number, satisfactory: 'yes' | 'no') => void;
 }
 
 export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
@@ -38,6 +42,9 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   disabled,
   error,
   declarationStyle,
+  showRowAssessmentColumn,
+  rowAssessments,
+  onRowAssessmentChange,
 }) => {
   const pm = (question.pdf_meta as Record<string, unknown>) || {};
   const wordLimit = normalizeWordLimit(pm.wordLimit);
@@ -78,6 +85,9 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         onChange={(v) => onChange(v)}
         disabled={disabled}
         error={error}
+        showRowAssessmentColumn={showRowAssessmentColumn}
+        rowAssessments={rowAssessments}
+        onRowAssessmentChange={onRowAssessmentChange}
       />
     );
   }

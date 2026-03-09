@@ -6,7 +6,9 @@ import {
   fetchInstance,
   saveAnswer,
   saveTrainerAssessment,
+  saveTrainerRowAssessment,
   fetchTrainerAssessments,
+  fetchTrainerRowAssessments,
   fetchResultsOffice,
   saveResultsOffice,
   fetchResultsData,
@@ -54,6 +56,7 @@ export const InstanceFillPage: React.FC = () => {
   const [template, setTemplate] = useState<FormTemplate | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | number | boolean | Record<string, unknown> | string[]>>({});
   const [trainerAssessments, setTrainerAssessments] = useState<Record<number, string>>({});
+  const [trainerRowAssessments, setTrainerRowAssessments] = useState<Record<string, string>>({});
   const [resultsOffice, setResultsOffice] = useState<Record<number, { entered_date: string | null; entered_by: string | null }>>({});
   const [resultsData, setResultsData] = useState<Record<number, import('../lib/formEngine').ResultsDataEntry>>({});
   const [assessmentSummary, setAssessmentSummary] = useState<import('../lib/formEngine').AssessmentSummaryDataEntry | null>(null);
@@ -97,11 +100,12 @@ export const InstanceFillPage: React.FC = () => {
     }
     const tokenRole = access.role_context as FormRole;
     setRole(tokenRole);
-    const [tpl, ans, inst, assessments, officeData, resultsDataRes, summaryData] = await Promise.all([
+    const [tpl, ans, inst, assessments, rowAssessments, officeData, resultsDataRes, summaryData] = await Promise.all([
       fetchTemplateForInstance(id),
       fetchAnswersForInstance(id),
       fetchInstance(id),
       fetchTrainerAssessments(id).catch(() => ({})),
+      fetchTrainerRowAssessments(id).catch(() => ({})),
       fetchResultsOffice(id).catch(() => ({})),
       fetchResultsData(id).catch(() => ({})),
       fetchAssessmentSummaryData(id).catch(() => null),
@@ -132,6 +136,7 @@ export const InstanceFillPage: React.FC = () => {
     }
     setAnswers(ansMap);
     setTrainerAssessments(assessments || {});
+    setTrainerRowAssessments(rowAssessments || {});
     const officeMap: Record<number, { entered_date: string | null; entered_by: string | null }> = {};
     for (const [secId, entry] of Object.entries(officeData || {})) {
       const e = entry as { entered_date: string | null; entered_by: string | null };
@@ -395,6 +400,16 @@ export const InstanceFillPage: React.FC = () => {
     (questionId: number, satisfactory: 'yes' | 'no') => {
       setTrainerAssessments((prev) => ({ ...prev, [questionId]: satisfactory }));
       saveTrainerAssessment(id, questionId, satisfactory);
+      setPdfRefresh((r) => r + 1);
+    },
+    [id]
+  );
+
+  const handleTrainerRowAssessmentChange = useCallback(
+    (questionId: number, rowId: number, satisfactory: 'yes' | 'no') => {
+      const key = `q-${questionId}-${rowId}`;
+      setTrainerRowAssessments((prev) => ({ ...prev, [key]: satisfactory }));
+      saveTrainerRowAssessment(id, questionId, rowId, satisfactory);
       setPdfRefresh((r) => r + 1);
     },
     [id]
@@ -977,7 +992,7 @@ export const InstanceFillPage: React.FC = () => {
                           const instr = taskRow?.row_meta?.instructions;
                           if (!instr) return <div className="text-gray-500 italic">No instructions configured for this task.</div>;
                           const customBlocks = Array.isArray((instr as { blocks?: unknown[] }).blocks)
-                            ? ((instr as { blocks?: Array<{ id?: string; type?: string; heading?: string; content?: string; rows?: Array<{ heading?: string; content?: string }> }> }).blocks || [])
+                            ? ((instr as { blocks?: Array<{ id?: string; type?: string; heading?: string; content?: string; columnHeaders?: string[]; rows?: Array<{ heading?: string; content?: string; cells?: string[] }> }> }).blocks || [])
                             : [];
                           if (customBlocks.length > 0) {
                             return (
@@ -994,15 +1009,40 @@ export const InstanceFillPage: React.FC = () => {
                                       {b.type === 'table' ? (
                                         <div className={`border border-gray-200 ${String(b.heading || '').trim() ? 'border-t-0 rounded-b' : 'rounded'} overflow-x-auto`}>
                                           <table className="w-full border-collapse text-sm table-fixed">
-                                            <tbody>
-                                              {(Array.isArray(b.rows) ? b.rows : []).map((r, ri) => (
-                                                <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                                  <td className="border border-gray-300 p-2 align-top font-semibold w-[24%] break-words whitespace-normal">{String(r.heading || '')}</td>
-                                                  <td className="border border-gray-300 border-r p-2 align-top w-[76%]">
-                                                    <div className="prose prose-sm max-w-none break-words whitespace-normal overflow-visible" dangerouslySetInnerHTML={{ __html: String(r.content || '') }} />
-                                                  </td>
+                                            {Array.isArray(b.columnHeaders) && b.columnHeaders.length > 0 && (
+                                              <thead>
+                                                <tr className="bg-gray-200">
+                                                  {b.columnHeaders.map((h, hi) => (
+                                                    <th key={hi} className="border border-gray-300 p-2 text-left font-semibold text-gray-700 break-words">
+                                                      {h}
+                                                    </th>
+                                                  ))}
                                                 </tr>
-                                              ))}
+                                              </thead>
+                                            )}
+                                            <tbody>
+                                              {(Array.isArray(b.rows) ? b.rows : []).map((r, ri) => {
+                                                const cells = r.cells;
+                                                const isMultiCol = Array.isArray(cells) && cells.length > 0;
+                                                return (
+                                                  <tr key={ri} className={ri % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                                    {isMultiCol ? (
+                                                      cells.map((cell, ci) => (
+                                                        <td key={ci} className="border border-gray-300 p-2 align-top break-words whitespace-normal">
+                                                          <div className="prose prose-sm max-w-none break-words whitespace-normal overflow-visible" dangerouslySetInnerHTML={{ __html: String(cell || '').replace(/\n/g, '<br/>') }} />
+                                                        </td>
+                                                      ))
+                                                    ) : (
+                                                      <>
+                                                        <td className="border border-gray-300 p-2 align-top font-semibold w-[24%] break-words whitespace-normal">{String(r.heading || '')}</td>
+                                                        <td className="border border-gray-300 border-r p-2 align-top w-[76%]">
+                                                          <div className="prose prose-sm max-w-none break-words whitespace-normal overflow-visible" dangerouslySetInnerHTML={{ __html: String(r.content || '') }} />
+                                                        </td>
+                                                      </>
+                                                    )}
+                                                  </tr>
+                                                );
+                                              })}
                                             </tbody>
                                           </table>
                                         </div>
@@ -1042,6 +1082,162 @@ export const InstanceFillPage: React.FC = () => {
                           );
                         })()
                       ) : section.pdf_render_mode === 'task_questions' ? (
+                        (() => {
+                          const taskRowsOrderedForQuestions: { id: number }[] = [];
+                          for (const step of template?.steps || []) {
+                            for (const sec of step.sections) {
+                              if (sec.pdf_render_mode === 'assessment_tasks') {
+                                const taskQ = sec.questions.find((q) => q.type === 'grid_table' && q.rows.length > 0);
+                                if (taskQ) for (const r of taskQ.rows) taskRowsOrderedForQuestions.push({ id: r.id });
+                              }
+                            }
+                          }
+                          const taskRowId = (section as { assessment_task_row_id?: number | null }).assessment_task_row_id;
+                          const assessmentTaskIndex = taskRowId ? taskRowsOrderedForQuestions.findIndex((r) => r.id === taskRowId) + 1 : 1;
+                          const isAssessment2Plus = assessmentTaskIndex >= 2;
+
+                          if (isAssessment2Plus) {
+                            return (
+                              <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                                <div className="bg-[#5E5E5E] text-white font-bold px-4 py-3">
+                                  {section.title}
+                                </div>
+                                <div className="bg-[#6b7280] text-white text-sm px-4 py-2">
+                                  Provide your response to each question in the box below.
+                                </div>
+                                <div className="p-4 space-y-6">
+                                  {section.questions
+                                    .filter((q) => q.type !== 'instruction_block' && q.type !== 'page_break' && !(q.pdf_meta as Record<string, unknown>)?.isAdditionalBlockOf && isRoleVisible((q.role_visibility as Record<string, boolean>) || {}, role))
+                                    .map((q) => {
+                                      const re = (q.role_editability as Record<string, boolean>) || {};
+                                      const editable = isRoleEditable(re, role) && canRoleEditCurrentWorkflow;
+                                      const trainerEditable = role === 'trainer' || role === 'office';
+                                      const pm = (q.pdf_meta as Record<string, unknown>) || {};
+                                      const textAboveHeader = String(pm.textAboveHeader ?? '').trim();
+                                      const legacyAb = pm.additionalBlock as Record<string, unknown> | undefined;
+                                      const contentBlocks: Array<{ type: string; content?: string; questionId?: number; headerText?: string }> = Array.isArray(pm.contentBlocks)
+                                        ? (pm.contentBlocks as Array<{ type: string; content?: string; questionId?: number; headerText?: string }>)
+                                        : legacyAb ? [{ type: String(legacyAb.type ?? 'instruction_block'), content: legacyAb.content as string | undefined, questionId: legacyAb.questionId as number | undefined }] : [];
+                                      const wrapWithHeader = (key: string, headerText: string | undefined, content: React.ReactNode) => (
+                                        <div key={key} className="mt-3">
+                                          {headerText && <div className="font-bold text-gray-900 mb-2">{headerText}</div>}
+                                          {content}
+                                        </div>
+                                      );
+                                      const renderBlock = (block: { type: string; content?: string; questionId?: number; headerText?: string }, key: string) => {
+                                        if (block.type === 'instruction_block' && block.content) {
+                                          return wrapWithHeader(key, block.headerText, <div className="text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: String(block.content) }} />);
+                                        }
+                                        const childQ = block.questionId ? section.questions.find((x) => x.id === block.questionId) : null;
+                                        if (!childQ) return null;
+                                        if (block.type === 'grid_table' && childQ.rows?.length) {
+                                          const merged: Record<string, string> = {};
+                                          for (const r of childQ.rows) {
+                                            const v = answers[getAnswerKey(childQ.id, r.id)];
+                                            if (v && typeof v === 'object') Object.assign(merged, v as Record<string, string>);
+                                          }
+                                          const onGridChange = (v: string | number | boolean | Record<string, unknown> | string[]) => {
+                                            const o = v as Record<string, string>;
+                                            if (!o || typeof o !== 'object') return;
+                                            const byRow = new Map<number, Record<string, string>>();
+                                            for (const [k, val] of Object.entries(o)) {
+                                              const match = /^r(\d+)_c/.exec(k);
+                                              if (match) {
+                                                const rowId = Number(match[1]);
+                                                if (!byRow.has(rowId)) byRow.set(rowId, {});
+                                                byRow.get(rowId)![k] = String(val);
+                                              }
+                                            }
+                                            for (const [rowId, rowData] of byRow.entries()) {
+                                              handleAnswerChange(childQ.id, rowId, rowData);
+                                            }
+                                          };
+                                          const rowAssessForChild: Record<number, string> = {};
+                                          for (const r of childQ.rows) {
+                                            const v = trainerRowAssessments[`q-${childQ.id}-${r.id}`];
+                                            if (v) rowAssessForChild[r.id] = v;
+                                          }
+                                          return wrapWithHeader(key, block.headerText, (
+                                            <QuestionRenderer
+                                              question={childQ}
+                                              value={Object.keys(merged).length ? merged : null}
+                                              onChange={onGridChange}
+                                              disabled={!editable}
+                                              error={errors[`q-${childQ.id}`]}
+                                              showRowAssessmentColumn={true}
+                                              rowAssessments={rowAssessForChild}
+                                              onRowAssessmentChange={trainerEditable ? (rid, sat) => handleTrainerRowAssessmentChange(childQ.id, rid, sat) : undefined}
+                                            />
+                                          ));
+                                        }
+                                        if (block.type === 'short_text' || block.type === 'long_text') {
+                                          const val = answers[getAnswerKey(childQ.id, null)] as string | undefined;
+                                          return wrapWithHeader(key, block.headerText, <QuestionRenderer question={childQ} value={val ?? null} onChange={(v) => handleAnswerChange(childQ.id, null, v as string | number | boolean | Record<string, unknown> | string[])} disabled={!editable} error={errors[`q-${childQ.id}`]} />);
+                                        }
+                                        return null;
+                                      };
+                                      return (
+                                        <div key={q.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                                          <div className="bg-gray-100 font-semibold text-gray-800 px-4 py-2 border-b border-gray-200">
+                                            {q.label}
+                                          </div>
+                                          <div className="p-4">
+                                            {textAboveHeader && <div className="font-bold text-gray-900 mb-2">{textAboveHeader}</div>}
+                                            {q.type === 'grid_table' && q.rows.length > 0 ? (
+                                              (() => {
+                                                const merged: Record<string, string> = {};
+                                                for (const r of q.rows) {
+                                                  const v = answers[getAnswerKey(q.id, r.id)];
+                                                  if (v && typeof v === 'object') Object.assign(merged, v as Record<string, string>);
+                                                }
+                                                const onGridChange = (v: string | number | boolean | Record<string, unknown> | string[]) => {
+                                                  const o = v as Record<string, string>;
+                                                  if (!o || typeof o !== 'object') return;
+                                                  const byRow = new Map<number, Record<string, string>>();
+                                                  for (const [k, val] of Object.entries(o)) {
+                                                    const match = /^r(\d+)_c/.exec(k);
+                                                    if (match) {
+                                                      const rowId = Number(match[1]);
+                                                      if (!byRow.has(rowId)) byRow.set(rowId, {});
+                                                      byRow.get(rowId)![k] = String(val);
+                                                    }
+                                                  }
+                                                  for (const [rowId, rowData] of byRow.entries()) {
+                                                    handleAnswerChange(q.id, rowId, rowData);
+                                                  }
+                                                };
+                                                const rowAssessForQ: Record<number, string> = {};
+                                                for (const r of q.rows) {
+                                                  const v = trainerRowAssessments[`q-${q.id}-${r.id}`];
+                                                  if (v) rowAssessForQ[r.id] = v;
+                                                }
+                                                return (
+                                                  <QuestionRenderer
+                                                    question={q}
+                                                    value={Object.keys(merged).length ? merged : null}
+                                                    onChange={onGridChange}
+                                                    disabled={!editable}
+                                                    error={errors[`q-${q.id}`]}
+                                                    showRowAssessmentColumn={true}
+                                                    rowAssessments={rowAssessForQ}
+                                                    onRowAssessmentChange={trainerEditable ? (rid, sat) => handleTrainerRowAssessmentChange(q.id, rid, sat) : undefined}
+                                                  />
+                                                );
+                                              })()
+                                            ) : (
+                                              <QuestionRenderer question={q} value={(answers[getAnswerKey(q.id, null)] as string | number | boolean | Record<string, unknown> | string[] | undefined) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string | number | boolean | Record<string, unknown> | string[])} disabled={!editable} error={errors[`q-${q.id}`]} />
+                                            )}
+                                            {contentBlocks.map((block, bi) => renderBlock(block, String(block.questionId ?? `block-${bi}`)))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
                         <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                           <div className="bg-[#5E5E5E] text-white font-bold px-4 py-3">
                             {section.title}
@@ -1196,6 +1392,8 @@ export const InstanceFillPage: React.FC = () => {
                             </table>
                           </div>
                         </div>
+                          );
+                        })()
                       ) : section.pdf_render_mode === 'task_results' ? (
                         (() => {
                           const rd = resultsData[section.id];

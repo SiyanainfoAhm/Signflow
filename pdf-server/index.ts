@@ -356,11 +356,24 @@ function buildHtml(data: {
   answers: Map<string, string | number | Record<string, unknown>>;
   taskRowsMap?: Map<number, FormQuestionRow>;
   trainerAssessments?: Map<number, string>;
+  trainerRowAssessments?: Map<string, string>;
   resultsOffice?: Map<number, { entered_date: string | null; entered_by: string | null }>;
   resultsData?: Map<number, { first_attempt_satisfactory?: string | null; first_attempt_date?: string | null; first_attempt_feedback?: string | null; second_attempt_satisfactory?: string | null; second_attempt_date?: string | null; second_attempt_feedback?: string | null; trainer_name?: string | null; trainer_signature?: string | null; trainer_date?: string | null }>;
   assessmentSummaryData?: Record<string, string | null>;
 }): { html: string; unitCode: string; version: string; headerHtml: string } {
-  const { form, steps, answers, taskRowsMap = new Map(), trainerAssessments = new Map(), resultsOffice = new Map(), resultsData = new Map(), assessmentSummaryData = {} } = data;
+  const { form, steps, answers, taskRowsMap = new Map(), trainerAssessments = new Map(), trainerRowAssessments = new Map(), resultsOffice = new Map(), resultsData = new Map(), assessmentSummaryData = {} } = data;
+
+  const orderedTaskRowIds: number[] = [];
+  for (const g of steps) {
+    for (const { section: sec, questions: qs } of g.sections) {
+      if (sec.pdf_render_mode === 'assessment_tasks') {
+        const tq = qs.find((x) => x.question.type === 'grid_table' && x.rows.length > 0);
+        if (tq) for (const r of tq.rows) orderedTaskRowIds.push(r.id);
+        break;
+      }
+    }
+    if (orderedTaskRowIds.length > 0) break;
+  }
   // Header images: crest (shield logo) and text logo
   let crestImg = form.header_asset_url || '';
   let textImg = '';
@@ -1156,7 +1169,7 @@ function buildHtml(data: {
         html += `<div class="task-instructions-subheader">Assessment method-based instructions and guidelines: ${row?.row_help || ''}</div>`;
         if (instr) {
           const customBlocks = Array.isArray((instr as { blocks?: unknown[] }).blocks)
-            ? ((instr as { blocks?: Array<{ id?: string; type?: string; heading?: string; content?: string; rows?: Array<{ heading?: string; content?: string }> }> }).blocks || [])
+            ? ((instr as { blocks?: Array<{ id?: string; type?: string; heading?: string; content?: string; columnHeaders?: string[]; rows?: Array<{ heading?: string; content?: string; cells?: string[] }> }> }).blocks || [])
             : [];
           if (customBlocks.length > 0) {
             for (const b of customBlocks) {
@@ -1164,13 +1177,30 @@ function buildHtml(data: {
               if (b.type === 'table') {
                 if (heading) html += `<div class="task-instructions-block-title">${heading}</div>`;
                 const rows = Array.isArray(b.rows) ? b.rows : [];
+                const columnHeaders = Array.isArray(b.columnHeaders) ? b.columnHeaders : [];
                 if (rows.length > 0) {
                   html += '<table class="section-table task-instructions-table"><tbody>';
-                  for (const r of rows) {
+                  if (columnHeaders.length > 0) {
                     html += '<tr>';
-                    html += `<td class="label-cell" style="width:35%;font-weight:700">${String(r.heading || '')}</td>`;
-                    html += `<td class="value-cell">${String(r.content || '')}</td>`;
+                    for (const h of columnHeaders) {
+                      html += `<th class="label-cell" style="font-weight:700;border:1px solid #000;padding:6px 8px;text-align:left">${String(h).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</th>`;
+                    }
                     html += '</tr>';
+                  }
+                  for (const r of rows) {
+                    const cells = r.cells;
+                    if (Array.isArray(cells) && cells.length > 0) {
+                      html += '<tr>';
+                      for (const c of cells) {
+                        html += `<td class="value-cell" style="border:1px solid #000;padding:6px 8px">${String(c ?? '')}</td>`;
+                      }
+                      html += '</tr>';
+                    } else {
+                      html += '<tr>';
+                      html += `<td class="label-cell" style="width:35%;font-weight:700;border:1px solid #000;padding:6px 8px">${String(r.heading || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+                      html += `<td class="value-cell" style="border:1px solid #000;padding:6px 8px">${String(r.content || '')}</td>`;
+                      html += '</tr>';
+                    }
                   }
                   html += '</tbody></table>';
                 }
@@ -1204,6 +1234,8 @@ function buildHtml(data: {
         const instr = row?.row_meta?.instructions as Record<string, string> | undefined;
         const assessmentType = instr?.assessment_type ? String(instr.assessment_type).replace(/<[^>]*>/g, '').trim() || (row?.row_help || 'Assessment') : (row?.row_help || 'Assessment');
         const taskHeaderTitle = `${row?.row_label || section.title} – ${assessmentType}`;
+        const assessmentTaskIndex = rowId && orderedTaskRowIds.length > 0 ? (orderedTaskRowIds.indexOf(rowId) + 1) || 1 : 1;
+        const isAssessment2Plus = assessmentTaskIndex >= 2;
         html += '<div class="task-questions-page">';
         html += `<div class="task-questions-header">${taskHeaderTitle}</div>`;
         html += `<div class="task-questions-subheader">Provide your response to each question in the box below.</div>`;
@@ -1223,6 +1255,154 @@ function buildHtml(data: {
           const isGridTable = question.type === 'grid_table' && rows.length > 0;
           const boxClass = 'task-q-question-box' + (nextIsPageBreak ? ' page-break-after' : '');
           html += `<div class="${boxClass}">`;
+          if (isAssessment2Plus) {
+            html += `<div class="task-q-question-label" style="font-weight:bold;margin-bottom:8px">${question.label}</div>`;
+            const pmTop = (question.pdf_meta as Record<string, unknown>) || {};
+            const textAboveHeader = String(pmTop.textAboveHeader ?? '').trim();
+            if (textAboveHeader) html += `<div class="task-q-text-above-header">${textAboveHeader}</div>`;
+            if (isGridTable) {
+              const pm = (question.pdf_meta as Record<string, unknown>) || {};
+              const columnsMeta = getGridColumnsMeta(pm);
+              const cols = columnsMeta.map((c) => c.label);
+              const headerCaseRaw = String(pm.headerCase ?? 'original').toLowerCase();
+              const headerCase: GridHeaderCase = headerCaseRaw === 'uppercase' || headerCaseRaw === 'title' ? headerCaseRaw : 'original';
+              const layout = (pm.layout as string) || 'no_image';
+              const isSplit = layout === 'split' || layout === 'polygon';
+              const isNoImage = layout === 'no_image' || layout === 'no_image_no_header';
+              const isNoHeader = layout === 'no_image_no_header';
+              const noImageIncludeBaseColumns = !isNoImage;
+              const firstCol = (pm.firstColumnLabel as string) || (isNoImage ? 'Item' : layout === 'default' ? 'Shape' : 'Name');
+              const secondCol = (pm.secondColumnLabel as string) || (isNoImage ? 'Description' : 'Image');
+              const firstQuestionColIndex = columnsMeta.findIndex((c) => c.type === 'question');
+              const columnWordLimits = (Array.isArray(pm.columnWordLimits) ? pm.columnWordLimits : []).map((v: unknown) => (typeof v === 'number' && v > 0 ? v : null)) as (number | null)[];
+              html += '<table class="section-table grid-table-no-border task-q-inner-table">';
+              if (!isNoHeader) {
+                html += '<thead><tr>';
+                if (isSplit) html += `<th>${formatGridHeader(secondCol, headerCase)}</th>`;
+                else if (isNoImage && noImageIncludeBaseColumns) html += `<th>${formatGridHeader(firstCol, headerCase)}</th><th>${formatGridHeader(secondCol, headerCase)}</th>`;
+                else if (!isNoImage) html += `<th>${formatGridHeader(firstCol, headerCase)}</th>`;
+                for (const c of cols) html += `<th>${formatGridHeader(c, headerCase)}</th>`;
+                html += '<th class="sub-section-header" style="width:60px;text-align:center">Status</th></tr></thead>';
+              }
+              html += '<tbody>';
+              for (const r of rows) {
+                const key = `q-${question.id}-${r.id}`;
+                const val = answers.get(key) as Record<string, string> | undefined;
+                const rowSat = trainerRowAssessments.get(key);
+                const rowYes = rowSat === 'yes';
+                const rowNo = rowSat === 'no';
+                html += '<tr>';
+                if (isSplit) {
+                  html += `<td class="value-cell col-question">${r.row_image_url ? `<img src="${r.row_image_url}" class="signature-img" alt="" /><br/>${r.row_label}` : r.row_label}</td>`;
+                } else if (isNoImage) {
+                  if (noImageIncludeBaseColumns) {
+                    html += `<td class="label-cell col-question">${r.row_label}</td>`;
+                    html += `<td class="value-cell col-question">${r.row_help || '—'}</td>`;
+                  }
+                } else {
+                  html += `<td class="label-cell col-question">${r.row_image_url ? `<img src="${r.row_image_url}" class="signature-img" alt="" /><br/>${r.row_label}` : r.row_label}</td>`;
+                }
+                for (let ci = 0; ci < cols.length; ci++) {
+                  const colType = columnsMeta[ci]?.type === 'question' ? 'question' : 'answer';
+                  const questionCell = isNoImage && !noImageIncludeBaseColumns && ci === firstQuestionColIndex
+                    ? (r.row_label || r.row_help || '—')
+                    : (r.row_help || '—');
+                  const cellVal = colType === 'question' ? questionCell : (val && typeof val === 'object' ? (val[`r${r.id}_c${ci}`] || '') : '');
+                  const cellClass = colType === 'question' ? 'value-cell col-question' : 'value-cell';
+                  const wl = columnWordLimits[ci];
+                  const cellStyle = colType === 'answer' && wl ? `min-height:${heightFromWordLimit(wl)}px;max-height:${heightFromWordLimit(wl)}px;height:${heightFromWordLimit(wl)}px;` : '';
+                  html += `<td class="${cellClass}"${cellStyle ? ` style="${cellStyle}"` : ''}>${cellVal}</td>`;
+                }
+                html += `<td class="value-cell" style="text-align:center;vertical-align:middle"><span class="radio-circle${rowYes ? ' filled' : ''}" style="display:inline-block;width:12px;height:12px;border:1px solid #000;border-radius:50%;margin-right:4px"></span>✓<span class="radio-circle${rowNo ? ' filled' : ''}" style="display:inline-block;width:12px;height:12px;border:1px solid #000;border-radius:50%;margin-left:8px;margin-right:4px"></span>✗</td>`;
+                html += '</tr>';
+              }
+              html += '</tbody></table>';
+            } else {
+              const key = rows[0] ? `q-${question.id}-${rows[0].id}` : `q-${question.id}`;
+              const val = answers.get(key);
+              const qPm = question.pdf_meta as Record<string, unknown> | undefined;
+              const qWordLimit = typeof qPm?.wordLimit === 'number' && qPm.wordLimit > 0 ? qPm.wordLimit : null;
+              const blockClass = question.type === 'long_text' ? 'task-q-answer-block task-q-answer-large' : 'task-q-answer-block';
+              const blockStyle = qWordLimit ? `min-height:${heightFromWordLimit(qWordLimit)}px;max-height:${heightFromWordLimit(qWordLimit)}px;height:${heightFromWordLimit(qWordLimit)}px;` : '';
+              html += `<div class="${blockClass}"${blockStyle ? ` style="${blockStyle}"` : ''}>${val ?? ''}</div>`;
+            }
+            const legacyAb = pmTop?.additionalBlock as Record<string, unknown> | undefined;
+            const contentBlocks: Array<{ type: string; content?: string; questionId?: number; headerText?: string }> = Array.isArray(pmTop?.contentBlocks)
+              ? (pmTop.contentBlocks as Array<{ type: string; content?: string; questionId?: number; headerText?: string }>)
+              : legacyAb ? [{ type: String(legacyAb.type ?? 'instruction_block'), content: legacyAb.content as string, questionId: legacyAb.questionId as number }] : [];
+            const blockHeaderHtml = (ht: string | undefined) => (ht ? `<div class="task-q-text-above-header">${ht}</div>` : '');
+            for (const block of contentBlocks) {
+              if (block.type === 'instruction_block' && (block.content as string)) {
+                html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}<div class="task-q-additional-instruction">${block.content as string}</div></div>`;
+              } else if ((block.type === 'short_text' || block.type === 'long_text') && block.questionId) {
+                const childQ = questions.find((x) => x.question.id === block.questionId);
+                if (childQ) {
+                  const cq = childQ.question;
+                  const key = `q-${cq.id}`;
+                  const val = answers.get(key);
+                  const cqPm = (cq.pdf_meta as Record<string, unknown>) || {};
+                  const qWordLimit = typeof cqPm?.wordLimit === 'number' && cqPm.wordLimit > 0 ? cqPm.wordLimit : null;
+                  const blockClass = block.type === 'long_text' ? 'task-q-answer-block task-q-answer-large' : 'task-q-answer-block';
+                  const blockStyle = qWordLimit ? `min-height:${heightFromWordLimit(qWordLimit)}px;max-height:${heightFromWordLimit(qWordLimit)}px;height:${heightFromWordLimit(qWordLimit)}px;` : '';
+                  html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}<div class="task-q-question-label">${cq.label}</div><div class="${blockClass}"${blockStyle ? ` style="${blockStyle}"` : ''}>${val ?? ''}</div></div>`;
+                }
+              } else if (block.type === 'grid_table' && block.questionId) {
+                const childQ = questions.find((x) => x.question.id === block.questionId);
+                if (childQ) {
+                  const { question: cq, rows: cRows } = childQ;
+                  const cqPm = (cq.pdf_meta as Record<string, unknown>) || {};
+                  const cColumnsMeta = getGridColumnsMeta(cqPm);
+                  const cCols = cColumnsMeta.map((c) => c.label);
+                  const cHeaderCaseRaw = String(cqPm.headerCase ?? 'original').toLowerCase();
+                  const cHeaderCase: GridHeaderCase = cHeaderCaseRaw === 'uppercase' || cHeaderCaseRaw === 'title' ? cHeaderCaseRaw : 'original';
+                  const cLayout = (cqPm.layout as string) || 'no_image';
+                  const cIsSplit = cLayout === 'split' || cLayout === 'polygon';
+                  const cIsNoImage = cLayout === 'no_image' || cLayout === 'no_image_no_header';
+                  const cNoImageIncludeBaseColumns = !cIsNoImage;
+                  const cFirstCol = (cqPm.firstColumnLabel as string) || (cIsNoImage ? 'Item' : cLayout === 'default' ? 'Shape' : 'Name');
+                  const cSecondCol = (cqPm.secondColumnLabel as string) || (cIsNoImage ? 'Description' : 'Image');
+                  const cFirstQuestionColIndex = cColumnsMeta.findIndex((c) => c.type === 'question');
+                  const cColumnWordLimits = (Array.isArray(cqPm.columnWordLimits) ? cqPm.columnWordLimits : []).map((v: unknown) => (typeof v === 'number' && v > 0 ? v : null)) as (number | null)[];
+                  html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}`;
+                  html += '<div class="task-q-additional-grid"><table class="section-table grid-table-no-border task-q-inner-table">';
+                  if (cLayout !== 'no_image_no_header') {
+                    html += '<thead><tr>';
+                    if (cIsSplit) html += `<th>${formatGridHeader(cSecondCol, cHeaderCase)}</th>`;
+                    else if (cIsNoImage && cNoImageIncludeBaseColumns) html += `<th>${formatGridHeader(cFirstCol, cHeaderCase)}</th><th>${formatGridHeader(cSecondCol, cHeaderCase)}</th>`;
+                    else if (!cIsNoImage) html += `<th>${formatGridHeader(cFirstCol, cHeaderCase)}</th>`;
+                    for (const c of cCols) html += `<th>${formatGridHeader(c, cHeaderCase)}</th>`;
+                    html += '<th class="sub-section-header" style="width:60px;text-align:center">Status</th></tr></thead>';
+                  }
+                  html += '<tbody>';
+                  for (const r of cRows) {
+                    const key = `q-${cq.id}-${r.id}`;
+                    const val = answers.get(key) as Record<string, string> | undefined;
+                    const rowSat = trainerRowAssessments.get(key);
+                    const rowYes = rowSat === 'yes';
+                    const rowNo = rowSat === 'no';
+                    html += '<tr>';
+                    if (cIsSplit) html += `<td class="value-cell col-question">${r.row_image_url ? `<img src="${r.row_image_url}" class="signature-img" alt="" /><br/>${r.row_label}` : r.row_label}</td>`;
+                    else if (cIsNoImage && cNoImageIncludeBaseColumns) { html += `<td class="label-cell col-question">${r.row_label}</td>`;
+                      html += `<td class="value-cell col-question">${r.row_help || '—'}</td>`;
+                    } else if (!cIsNoImage) html += `<td class="label-cell col-question">${r.row_image_url ? `<img src="${r.row_image_url}" class="signature-img" alt="" /><br/>${r.row_label}` : r.row_label}</td>`;
+                    for (let ci = 0; ci < cCols.length; ci++) {
+                      const colType = cColumnsMeta[ci]?.type === 'question' ? 'question' : 'answer';
+                      const questionCell = cIsNoImage && !cNoImageIncludeBaseColumns && ci === cFirstQuestionColIndex ? (r.row_label || r.row_help || '—') : (r.row_help || '—');
+                      const cellVal = colType === 'question' ? questionCell : (val && typeof val === 'object' ? (val[`r${r.id}_c${ci}`] || '') : '');
+                      const cellClass = colType === 'question' ? 'value-cell col-question' : 'value-cell';
+                      const wl = cColumnWordLimits[ci];
+                      const cellStyle = colType === 'answer' && wl ? `min-height:${heightFromWordLimit(wl)}px;max-height:${heightFromWordLimit(wl)}px;height:${heightFromWordLimit(wl)}px;` : '';
+                      html += `<td class="${cellClass}"${cellStyle ? ` style="${cellStyle}"` : ''}>${cellVal}</td>`;
+                    }
+                    html += `<td class="value-cell" style="text-align:center;vertical-align:middle"><span class="radio-circle${rowYes ? ' filled' : ''}" style="display:inline-block;width:12px;height:12px;border:1px solid #000;border-radius:50%;margin-right:4px"></span>✓<span class="radio-circle${rowNo ? ' filled' : ''}" style="display:inline-block;width:12px;height:12px;border:1px solid #000;border-radius:50%;margin-left:8px;margin-right:4px"></span>✗</td>`;
+                    html += '</tr>';
+                  }
+                  html += '</tbody></table></div></div>';
+                }
+              }
+            }
+            html += '</div>';
+          } else {
           html += '<table class="section-table task-questions-table"><tbody>';
           html += '<tr class="task-q-row-top">';
           html += `<td class="task-q-num-cell">Q${qNum}:</td>`;
@@ -1397,6 +1577,7 @@ function buildHtml(data: {
           html += '</tr>';
           html += '</tbody></table>';
           html += '</div>';
+        }
         }
         html += '</div>'; // Close task-questions-page wrapper
       } else if (section.pdf_render_mode === 'task_results') {
@@ -1843,6 +2024,7 @@ app.get('/pdf/:instanceId', async (req, res) => {
       .eq('instance_id', instanceId);
 
     let trainerAssessmentsMap = new Map<number, string>();
+    let trainerRowAssessmentsMap = new Map<string, string>();
     try {
       const { data: assessments } = await supabase
         .from('skyline_form_trainer_assessments')
@@ -1850,6 +2032,17 @@ app.get('/pdf/:instanceId', async (req, res) => {
         .eq('instance_id', instanceId);
       for (const a of (assessments as { question_id: number; satisfactory: string | null }[]) || []) {
         if (a.satisfactory) trainerAssessmentsMap.set(a.question_id, a.satisfactory);
+      }
+    } catch (_e) {
+      // Table may not exist before migration
+    }
+    try {
+      const { data: rowAssessments } = await supabase
+        .from('skyline_form_trainer_row_assessments')
+        .select('question_id, row_id, satisfactory')
+        .eq('instance_id', instanceId);
+      for (const a of (rowAssessments as { question_id: number; row_id: number; satisfactory: string | null }[]) || []) {
+        if (a.satisfactory) trainerRowAssessmentsMap.set(`q-${a.question_id}-${a.row_id}`, a.satisfactory);
       }
     } catch (_e) {
       // Table may not exist before migration
@@ -1968,6 +2161,7 @@ app.get('/pdf/:instanceId', async (req, res) => {
       answers: answerMap,
       taskRowsMap,
       trainerAssessments: trainerAssessmentsMap,
+      trainerRowAssessments: trainerRowAssessmentsMap,
       resultsOffice: resultsOfficeMap,
       resultsData: resultsDataMap,
       assessmentSummaryData: assessmentSummaryMap,
@@ -2102,6 +2296,7 @@ app.get('/pdf/preview/form/:formId', async (req, res) => {
       answers: answerMap,
       taskRowsMap,
       trainerAssessments: new Map<number, string>(),
+      trainerRowAssessments: new Map<string, string>(),
       resultsOffice: new Map<number, { entered_date: string | null; entered_by: string | null }>(),
       resultsData: new Map<number, { first_attempt_satisfactory?: string | null; first_attempt_date?: string | null; first_attempt_feedback?: string | null; second_attempt_satisfactory?: string | null; second_attempt_date?: string | null; second_attempt_feedback?: string | null; trainer_name?: string | null; trainer_signature?: string | null; trainer_date?: string | null }>(),
       assessmentSummaryData: {},

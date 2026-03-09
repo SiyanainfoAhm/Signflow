@@ -8,6 +8,10 @@ interface GridTableQuestionProps {
   onChange: (value: Record<string, string>) => void;
   disabled?: boolean;
   error?: string;
+  /** When true, adds a Status column with check/cancel per row (Assessment Task 2+) */
+  showRowAssessmentColumn?: boolean;
+  rowAssessments?: Record<number, string>;
+  onRowAssessmentChange?: (rowId: number, satisfactory: 'yes' | 'no') => void;
 }
 
 type GridColumnType = 'question' | 'answer';
@@ -74,6 +78,9 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
   onChange,
   disabled,
   error,
+  showRowAssessmentColumn,
+  rowAssessments = {},
+  onRowAssessmentChange,
 }) => {
   const pm = (question.pdf_meta as Record<string, unknown>) || {};
   const columnsMeta = getGridColumnsMeta(pm);
@@ -179,6 +186,9 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
                       {formatHeader(col, headerCase)}
                     </th>
                   ))}
+                  {showRowAssessmentColumn && (
+                    <th className={`${headerClass} w-20 text-center`}>Status</th>
+                  )}
                 </>
               ) : (
                 <>
@@ -190,6 +200,9 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
                       {formatHeader(col, headerCase)}
                     </th>
                   ))}
+                  {showRowAssessmentColumn && (
+                    <th className={`${headerClass} w-20 text-center`}>Status</th>
+                  )}
                 </>
               )}
             </tr>
@@ -217,6 +230,30 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
                     </div>
                   </td>
                   {columns.map((_, colIndex) => renderCell(row, colIndex))}
+                  {showRowAssessmentColumn && (
+                    <td className={`${cellClass} text-center`}>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onRowAssessmentChange?.(row.id, 'yes')}
+                          disabled={disabled}
+                          className={`p-1 rounded border ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          title="Satisfactory"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRowAssessmentChange?.(row.id, 'no')}
+                          disabled={disabled}
+                          className={`p-1 rounded border ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          title="Not satisfactory"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </>
               ) : isNoImage ? (
                 <>
@@ -231,6 +268,30 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
                     </>
                   )}
                   {columns.map((_, colIndex) => renderCell(row, colIndex))}
+                  {showRowAssessmentColumn && (
+                    <td className={`${cellClass} text-center`}>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onRowAssessmentChange?.(row.id, 'yes')}
+                          disabled={disabled}
+                          className={`p-1 rounded border ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          title="Satisfactory"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRowAssessmentChange?.(row.id, 'no')}
+                          disabled={disabled}
+                          className={`p-1 rounded border ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          title="Not satisfactory"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </>
               ) : (
                 <>
@@ -247,6 +308,30 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
                     </div>
                   </td>
                   {columns.map((_, colIndex) => renderCell(row, colIndex))}
+                  {showRowAssessmentColumn && (
+                    <td className={`${cellClass} text-center`}>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onRowAssessmentChange?.(row.id, 'yes')}
+                          disabled={disabled}
+                          className={`p-1 rounded border ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          title="Satisfactory"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onRowAssessmentChange?.(row.id, 'no')}
+                          disabled={disabled}
+                          className={`p-1 rounded border ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          title="Not satisfactory"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </>
               )}
             </tr>
