@@ -629,6 +629,9 @@ function buildHtml(data: {
     .task-questions-table .task-q-radio { display: inline-flex; align-items: center; gap: 6px; }
     .task-questions-table .task-q-radio .radio-circle { width: 12px; height: 12px; border: 1.5px solid #374151; border-radius: 50%; flex-shrink: 0; }
     .task-questions-table .task-q-radio .radio-circle.filled { background: #000; border-color: #000; }
+    .grid-status-yn-wrap { display: inline-flex !important; flex-direction: row !important; align-items: center !important; justify-content: center !important; gap: 6px !important; white-space: nowrap !important; font-size: 9px !important; font-family: Arial, sans-serif !important; }
+    .grid-status-cb { width: 10px !important; height: 10px !important; min-width: 10px !important; min-height: 10px !important; border: 1px solid #000 !important; border-radius: 2px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; flex-shrink: 0 !important; font-size: 8px !important; line-height: 1 !important; color: #000 !important; background: #fff !important; }
+    .grid-status-cb.checked { background: #000 !important; color: #fff !important; }
     .task-q-answer-block { padding: 12px; min-height: 36px; font-size: 11pt; background: #fff; box-sizing: border-box; overflow-wrap: anywhere; word-break: break-word; white-space: pre-line; }
     .task-q-answer-block.task-q-answer-large { min-height: 96px; }
     .task-questions-table .task-q-inner-table th, .task-questions-table .task-q-inner-table td,
@@ -1282,7 +1285,7 @@ function buildHtml(data: {
                 else if (isNoImage && noImageIncludeBaseColumns) html += `<th>${formatGridHeader(firstCol, headerCase)}</th><th>${formatGridHeader(secondCol, headerCase)}</th>`;
                 else if (!isNoImage) html += `<th>${formatGridHeader(firstCol, headerCase)}</th>`;
                 for (const c of cols) html += `<th>${formatGridHeader(c, headerCase)}</th>`;
-                html += '<th class="sub-section-header" style="width:60px;text-align:center">Status</th></tr></thead>';
+                html += '<th class="sub-section-header" style="width:48px;text-align:center">Status</th></tr></thead>';
               }
               html += '<tbody>';
               for (const r of rows) {
@@ -1313,7 +1316,7 @@ function buildHtml(data: {
                   const cellStyle = colType === 'answer' && wl ? `min-height:${heightFromWordLimit(wl)}px;max-height:${heightFromWordLimit(wl)}px;height:${heightFromWordLimit(wl)}px;` : '';
                   html += `<td class="${cellClass}"${cellStyle ? ` style="${cellStyle}"` : ''}>${cellVal}</td>`;
                 }
-                html += `<td class="value-cell" style="text-align:center;vertical-align:middle"><span class="radio-circle${rowYes ? ' filled' : ''}" style="display:inline-block;width:12px;height:12px;border:1px solid #000;border-radius:50%;margin-right:4px"></span>✓<span class="radio-circle${rowNo ? ' filled' : ''}" style="display:inline-block;width:12px;height:12px;border:1px solid #000;border-radius:50%;margin-left:8px;margin-right:4px"></span>✗</td>`;
+                html += `<td class="value-cell" style="text-align:center;vertical-align:middle;width:48px"><div class="grid-status-yn-wrap"><span class="grid-status-cb${rowYes ? ' checked' : ''}">&#10003;</span><span class="grid-status-cb${rowNo ? ' checked' : ''}">&#10007;</span></div></td>`;
                 html += '</tr>';
               }
               html += '</tbody></table>';
@@ -1371,7 +1374,7 @@ function buildHtml(data: {
                     else if (cIsNoImage && cNoImageIncludeBaseColumns) html += `<th>${formatGridHeader(cFirstCol, cHeaderCase)}</th><th>${formatGridHeader(cSecondCol, cHeaderCase)}</th>`;
                     else if (!cIsNoImage) html += `<th>${formatGridHeader(cFirstCol, cHeaderCase)}</th>`;
                     for (const c of cCols) html += `<th>${formatGridHeader(c, cHeaderCase)}</th>`;
-                    html += '<th class="sub-section-header" style="width:60px;text-align:center">Status</th></tr></thead>';
+                    html += '<th class="sub-section-header" style="width:48px;text-align:center">Status</th></tr></thead>';
                   }
                   html += '<tbody>';
                   for (const r of cRows) {
@@ -1394,7 +1397,7 @@ function buildHtml(data: {
                       const cellStyle = colType === 'answer' && wl ? `min-height:${heightFromWordLimit(wl)}px;max-height:${heightFromWordLimit(wl)}px;height:${heightFromWordLimit(wl)}px;` : '';
                       html += `<td class="${cellClass}"${cellStyle ? ` style="${cellStyle}"` : ''}>${cellVal}</td>`;
                     }
-                    html += `<td class="value-cell" style="text-align:center;vertical-align:middle"><span class="radio-circle${rowYes ? ' filled' : ''}" style="display:inline-block;width:12px;height:12px;border:1px solid #000;border-radius:50%;margin-right:4px"></span>✓<span class="radio-circle${rowNo ? ' filled' : ''}" style="display:inline-block;width:12px;height:12px;border:1px solid #000;border-radius:50%;margin-left:8px;margin-right:4px"></span>✗</td>`;
+                    html += `<td class="value-cell" style="text-align:center;vertical-align:middle;width:48px"><div class="grid-status-yn-wrap"><span class="grid-status-cb${rowYes ? ' checked' : ''}">&#10003;</span><span class="grid-status-cb${rowNo ? ' checked' : ''}">&#10007;</span></div></td>`;
                     html += '</tr>';
                   }
                   html += '</tbody></table></div></div>';

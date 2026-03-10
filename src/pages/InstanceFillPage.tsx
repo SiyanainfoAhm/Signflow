@@ -73,6 +73,7 @@ export const InstanceFillPage: React.FC = () => {
   const [accessDenied, setAccessDenied] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const formScrollRef = useRef<HTMLFormElement>(null);
 
   const id = instanceId ? Number(instanceId) : 0;
   const accessToken = searchParams.get('token')?.trim() || '';
@@ -666,6 +667,7 @@ export const InstanceFillPage: React.FC = () => {
       <div className="w-full px-4 md:px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <form
+            ref={formScrollRef}
             className="lg:col-span-9 space-y-6 overflow-y-auto max-h-[calc(100vh-8rem)] pr-2"
             onSubmit={(e) => e.preventDefault()}
           >
@@ -2116,6 +2118,8 @@ export const InstanceFillPage: React.FC = () => {
                   if (validateStep(currentStep)) {
                     setErrors({});
                     setCurrentStep((s) => Math.min(steps.length, s + 1));
+                    formScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                   }
                 }}
                 disabled={currentStep >= steps.length}
