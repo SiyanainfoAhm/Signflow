@@ -1,4 +1,5 @@
 import React from 'react';
+import { Check, X } from 'lucide-react';
 import type { FormQuestionWithOptionsAndRows } from '../../lib/formEngine';
 import { heightFromWordLimit } from '../ui/Textarea';
 
@@ -241,19 +242,19 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
                           type="button"
                           onClick={() => onRowAssessmentChange?.(row.id, 'yes')}
                           disabled={disabled}
-                          className={`p-1 rounded border ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          className={`p-1.5 rounded border flex items-center justify-center ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}
                           title="Satisfactory"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          <Check className="w-4 h-4" strokeWidth={2.5} />
                         </button>
                         <button
                           type="button"
                           onClick={() => onRowAssessmentChange?.(row.id, 'no')}
                           disabled={disabled}
-                          className={`p-1 rounded border ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          className={`p-1.5 rounded border flex items-center justify-center ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}
                           title="Not satisfactory"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          <X className="w-4 h-4" strokeWidth={2.5} />
                         </button>
                       </div>
                     </td>
@@ -279,19 +280,19 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
                           type="button"
                           onClick={() => onRowAssessmentChange?.(row.id, 'yes')}
                           disabled={disabled}
-                          className={`p-1 rounded border ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          className={`p-1.5 rounded border flex items-center justify-center ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}
                           title="Satisfactory"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          <Check className="w-4 h-4" strokeWidth={2.5} />
                         </button>
                         <button
                           type="button"
                           onClick={() => onRowAssessmentChange?.(row.id, 'no')}
                           disabled={disabled}
-                          className={`p-1 rounded border ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          className={`p-1.5 rounded border flex items-center justify-center ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}
                           title="Not satisfactory"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          <X className="w-4 h-4" strokeWidth={2.5} />
                         </button>
                       </div>
                     </td>
@@ -319,19 +320,19 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
                           type="button"
                           onClick={() => onRowAssessmentChange?.(row.id, 'yes')}
                           disabled={disabled}
-                          className={`p-1 rounded border ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          className={`p-1.5 rounded border flex items-center justify-center ${rowAssessments[row.id] === 'yes' ? 'bg-green-100 border-green-600 text-green-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}
                           title="Satisfactory"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                          <Check className="w-4 h-4" strokeWidth={2.5} />
                         </button>
                         <button
                           type="button"
                           onClick={() => onRowAssessmentChange?.(row.id, 'no')}
                           disabled={disabled}
-                          className={`p-1 rounded border ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-400 hover:border-gray-400'}`}
+                          className={`p-1.5 rounded border flex items-center justify-center ${rowAssessments[row.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}
                           title="Not satisfactory"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          <X className="w-4 h-4" strokeWidth={2.5} />
                         </button>
                       </div>
                     </td>
