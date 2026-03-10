@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { parseMixedContent as parseMixedContentUtil, stripLeadingRowNumberColumn } from '../../utils/parseMixedContent';
+import type { ParsedBlock, ParsedTableBlock } from '../../utils/parseMixedContent';
 import { RichTextEditor } from '../ui/RichTextEditor';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -43,6 +45,8 @@ interface TaskInstructionsModalProps {
   onClose: () => void;
   rowLabel: string;
   initialData?: TaskInstructionsData | null;
+  /** Fallback for assessment_type when instructions don't have it (e.g. from row_help: "Written Assignment (WA)") */
+  rowHelpFallback?: string | null;
   onSave: (data: TaskInstructionsData) => void;
 }
 
@@ -51,11 +55,13 @@ export function TaskInstructionsModal({
   onClose,
   rowLabel,
   initialData,
+  rowHelpFallback,
   onSave,
 }: TaskInstructionsModalProps) {
   const [data, setData] = useState<TaskInstructionsData>({});
   const [pasteDraftByBlock, setPasteDraftByBlock] = useState<Record<string, string>>({});
   const [autoCreatingBlockId, setAutoCreatingBlockId] = useState<string | null>(null);
+  const [smartPasteInput, setSmartPasteInput] = useState('');
 
   const escapeHtml = (input: string): string =>
     input
@@ -65,12 +71,10 @@ export function TaskInstructionsModal({
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
 
+  /** Convert plain text to HTML, handling bullets (• - – *), numbered (1. 2) a. (i)), and paragraphs. */
   const plainTextToHtml = (input: string): string => {
-    const lines = input
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (lines.length === 0) return '';
+    const nonEmpty = input.split(/\r?\n/).map((l) => l.trimEnd()).filter((l) => l.trim().length > 0);
+    if (nonEmpty.length === 0) return '';
 
     const parts: string[] = [];
     const paragraphBuffer: string[] = [];
@@ -92,33 +96,47 @@ export function TaskInstructionsModal({
       listItems = [];
     };
 
-    for (const rawLine of lines) {
-      const numbered = rawLine.match(/^\d+\.\s+(.*)$/);
-      const bulleted = rawLine.match(/^[-*•]\s+(.*)$/);
-      if (numbered) {
+    const isBullet = (line: string) => /^[•\-–*]\s/.test(line.trimStart());
+    const numberedMatch = (line: string) =>
+      line.match(/^\d+\.\s+(.*)$/) ||
+      line.match(/^\d+\)\s+(.*)$/) ||
+      line.match(/^[a-zA-Z]\.\s+(.*)$/) ||
+      line.match(/^\([iIvVxXdDlLcCmM0-9]+\)\s+(.*)$/);
+
+    for (const rawLine of nonEmpty) {
+      const line = rawLine.trimStart();
+      const numMatch = numberedMatch(line);
+      if (numMatch) {
         flushParagraph();
         if (listMode !== 'ol') flushList();
         listMode = 'ol';
-        listItems.push(escapeHtml(numbered[1]));
+        listItems.push(escapeHtml(numMatch[1] || line));
         continue;
       }
-      if (bulleted) {
+      if (isBullet(line)) {
         flushParagraph();
         if (listMode !== 'ul') flushList();
         listMode = 'ul';
-        listItems.push(escapeHtml(bulleted[1]));
+        const content = line.replace(/^[•\-–*]\s+/, '').trim() || line;
+        listItems.push(escapeHtml(content));
         continue;
       }
       if (listMode && listItems.length > 0) {
-        listItems[listItems.length - 1] += `<br/>${escapeHtml(rawLine)}`;
+        listItems[listItems.length - 1] += `<br/>${escapeHtml(line)}`;
       } else {
-        paragraphBuffer.push(escapeHtml(rawLine));
+        paragraphBuffer.push(escapeHtml(line));
       }
     }
 
     flushParagraph();
     flushList();
     return parts.join('');
+  };
+
+  /** Convert cell plain text (with bullets, numbers, newlines) to HTML for table cells. */
+  const cellContentToHtml = (input: string): string => {
+    if (!input || !input.trim()) return '';
+    return plainTextToHtml(input);
   };
 
   type ParseResult = { rows: InstructionTableRow[]; columnHeaders?: string[] };
@@ -128,6 +146,25 @@ export function TaskInstructionsModal({
     const lines = rawLines.filter((l) => l.trim().length > 0);
 
     if (lines.length === 0) return { rows: [] };
+
+    const looksLikeNumberedListContent = (): boolean => {
+      if (lines.length < 2) return false;
+      const first = lines[0] ?? '';
+      const tabParts = first.split(/\t/);
+      if (tabParts.length >= 3) return false;
+      const hasLeadingNum = /^\d+[.)]\s/.test(first) || /^\d+[.)]\t/.test(first);
+      const second = lines[1] ?? '';
+      const secondHasNum = /^\d+[.)]\s/.test(second) || /^\d+[.)]\t/.test(second);
+      return hasLeadingNum && secondHasNum && first.length > 10;
+    };
+
+    if (looksLikeNumberedListContent()) {
+      const fullContent = lines.join('\n');
+      return {
+        rows: [{ cells: ['', plainTextToHtml(fullContent)] }],
+        columnHeaders: undefined,
+      };
+    }
 
     // 1. Tab-delimited with multiline cells (Task / Instructions / Evidence format)
     const hasTabs = input.includes('\t');
@@ -282,6 +319,45 @@ export function TaskInstructionsModal({
     return { rows };
   };
 
+  /** Parse mixed paste (paragraphs + tables) into InstructionBlocks using the improved parser. */
+  const parsedBlocksToInstructionBlocks = (parsed: ParsedBlock[]): InstructionBlock[] => {
+    const ts = Date.now();
+    return parsed.map((b, i) => {
+      if (b.type === 'paragraph') {
+        const rawContent = [b.heading, b.content].filter(Boolean).join('\n\n').trim();
+        const content = rawContent ? plainTextToHtml(rawContent) : '';
+        return {
+          id: `smart-${ts}-${i}`,
+          type: 'paragraph' as const,
+          heading: b.heading && b.content ? b.heading : undefined,
+          content,
+        };
+      }
+      return {
+        id: `smart-${ts}-${i}`,
+        type: 'table' as const,
+        columnHeaders: b.headers,
+        rows: b.rows.map((cells) => ({
+          cells: cells.map((c) => cellContentToHtml(c)),
+        })),
+      };
+    });
+  };
+
+  const handleSmartPaste = () => {
+    const parsed = parseMixedContentUtil(smartPasteInput);
+    const blocks = parsedBlocksToInstructionBlocks(parsed);
+    if (blocks.length === 0) {
+      toast.error('No content could be parsed. Paste text with paragraphs (separated by blank lines) and/or tables (tab or 2+ spaces between columns).');
+      return;
+    }
+    updateBlocks(() => blocks);
+    setSmartPasteInput('');
+    const pCount = blocks.filter((b) => b.type === 'paragraph').length;
+    const tCount = blocks.filter((b) => b.type === 'table').length;
+    toast.success(`${blocks.length} block${blocks.length === 1 ? '' : 's'} created (${pCount} paragraph${pCount === 1 ? '' : 's'}, ${tCount} table${tCount === 1 ? '' : 's'})`);
+  };
+
   const buildLegacyBlocks = (raw?: TaskInstructionsData | null): InstructionBlock[] => {
     if (!raw) return [];
     const existing = Array.isArray(raw.blocks) ? raw.blocks : [];
@@ -332,13 +408,35 @@ export function TaskInstructionsModal({
       }));
   };
 
+  /** Extract plain text from HTML for assessment_type. */
+  const stripHtml = (html: string): string =>
+    String(html || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
   useEffect(() => {
     if (isOpen) {
       const blocks = buildLegacyBlocks(initialData);
-      setData({ ...(initialData ? { ...initialData } : {}), blocks });
+      let assessmentType = initialData?.assessment_type ?? '';
+      if (!assessmentType && blocks.length > 0) {
+        const atBlock = blocks.find(
+          (b) => b.type === 'paragraph' && String(b.heading || '').toLowerCase() === 'assessment type'
+        );
+        if (atBlock?.content) assessmentType = stripHtml(atBlock.content);
+      }
+      if (!assessmentType && rowHelpFallback) {
+        assessmentType = String(rowHelpFallback).trim();
+      }
+      setData({
+        ...(initialData ? { ...initialData } : {}),
+        assessment_type: assessmentType,
+        blocks,
+      });
       setPasteDraftByBlock({});
+      setSmartPasteInput('');
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, rowHelpFallback]);
 
   const updateBlocks = (updater: (prev: InstructionBlock[]) => InstructionBlock[]) => {
     setData((prev) => ({ ...prev, blocks: updater(Array.isArray(prev.blocks) ? prev.blocks : []) }));
@@ -471,8 +569,15 @@ export function TaskInstructionsModal({
       .filter((b) => {
         if (b.type === 'table') return (b.rows || []).length > 0;
         return b.content.replace(/<[^>]*>/g, '').trim();
+      })
+      .filter((b) => {
+        if (b.type === 'paragraph' && String(b.heading || '').toLowerCase() === 'assessment type') return false;
+        return true;
       });
-    onSave({ blocks: cleanedBlocks });
+    onSave({
+      blocks: cleanedBlocks,
+      assessment_type: String(data.assessment_type ?? '').trim() || undefined,
+    });
     onClose();
   };
 
@@ -486,6 +591,38 @@ export function TaskInstructionsModal({
           <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Assessment type</label>
+            <Textarea
+              value={data.assessment_type ?? ''}
+              onChange={(e) => setData((prev) => ({ ...prev, assessment_type: e.target.value }))}
+              placeholder="e.g. Written Assessment, Practical Assessment. Use new lines for multiple items (e.g. Practical Task 2.1, Practical Task 2.2)"
+              rows={3}
+              className="min-h-[80px]"
+            />
+            <p className="text-xs text-gray-500 mt-1">The type of assessment for this task (e.g. written, practical). Use new lines for multiple items. Editable for original and duplicated tasks.</p>
+          </div>
+          <div className="border border-[var(--brand)]/30 rounded-lg p-4 bg-[var(--brand)]/5 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-800">Paste mixed content</h3>
+            <p className="text-xs text-gray-600">
+              Paste from Word, Google Docs, or any document. Paragraphs and tables will be auto-detected. Separate paragraphs with blank lines. Tables need tab or 2+ spaces between columns.
+            </p>
+            <Textarea
+              value={smartPasteInput}
+              onChange={(e) => setSmartPasteInput(e.target.value)}
+              placeholder="Paste your content here... (paragraphs first, then table, or mixed)"
+              rows={8}
+              className="text-sm font-mono"
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSmartPaste}
+              disabled={!smartPasteInput.trim()}
+            >
+              Auto-create blocks from paste
+            </Button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Button variant="outline" onClick={() => addBlock('paragraph')}>+ Add paragraph block</Button>
             <Button variant="outline" onClick={() => addBlock('table')}>+ Add table block</Button>
@@ -548,9 +685,30 @@ export function TaskInstructionsModal({
                         disabled={!!autoCreatingBlockId}
                         onClick={async () => {
                           const blockId = block.id;
+                          const paste = pasteDraftByBlock[blockId] || '';
                           setAutoCreatingBlockId(blockId);
                           await new Promise((r) => setTimeout(r, 300));
-                          const { rows: parsedRows, columnHeaders } = parsePastedTableRows(pasteDraftByBlock[blockId] || '');
+                          let parsedRows: InstructionTableRow[];
+                          let columnHeaders: string[] | undefined;
+
+                          const parsed = parseMixedContentUtil(paste);
+                          const tableBlocks = parsed.filter((b): b is ParsedTableBlock => b.type === 'table');
+                          if (tableBlocks.length > 0) {
+                            const tb = tableBlocks[0];
+                            columnHeaders = tb.headers;
+                            parsedRows = tb.rows.map((cells) => ({
+                              cells: cells.map((c) => cellContentToHtml(c)),
+                            }));
+                          } else {
+                            const result = parsePastedTableRows(paste);
+                            parsedRows = result.rows;
+                            columnHeaders = result.columnHeaders ?? block.columnHeaders;
+                            const expectedCols = (block.columnHeaders ?? columnHeaders)?.length ?? 0;
+                            if (expectedCols === 2 && parsedRows.some((r) => (r.cells ?? []).length >= 2)) {
+                              parsedRows = stripLeadingRowNumberColumn(parsedRows, 2);
+                            }
+                          }
+
                           setAutoCreatingBlockId(null);
                           if (parsedRows.length > 0) {
                             updateBlock(index, { rows: parsedRows, columnHeaders });
@@ -582,9 +740,9 @@ export function TaskInstructionsModal({
                           <Button variant="outline" size="sm" onClick={() => removeTableRow(index, rowIdx)}>Remove row</Button>
                         </div>
                         {isMultiCol ? (
-                          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(headers.length, 4)}, 1fr)` }}>
+                          <div className="grid gap-2 items-start" style={{ gridTemplateColumns: `repeat(${Math.min(headers.length, 4)}, 1fr)` }}>
                             {headers.map((h, ci) => (
-                              <div key={ci}>
+                              <div key={ci} className="min-w-0">
                                 <label className="block text-xs text-gray-500 mb-0.5">{h}</label>
                                 <RichTextEditor
                                   value={cells[ci] ?? ''}

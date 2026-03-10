@@ -180,7 +180,7 @@ export function buildHtml(data: {
   taskRowsMap?: Map<number, FormQuestionRow>;
   trainerAssessments?: Map<number, string>;
   resultsOffice?: Map<number, { entered_date: string | null; entered_by: string | null }>;
-  resultsData?: Map<number, { first_attempt_satisfactory?: string | null; first_attempt_date?: string | null; first_attempt_feedback?: string | null; second_attempt_satisfactory?: string | null; second_attempt_date?: string | null; second_attempt_feedback?: string | null; trainer_name?: string | null; trainer_signature?: string | null; trainer_date?: string | null }>;
+  resultsData?: Map<number, { first_attempt_satisfactory?: string | null; first_attempt_date?: string | null; first_attempt_feedback?: string | null; second_attempt_satisfactory?: string | null; second_attempt_date?: string | null; second_attempt_feedback?: string | null; third_attempt_satisfactory?: string | null; third_attempt_date?: string | null; third_attempt_feedback?: string | null; trainer_name?: string | null; trainer_signature?: string | null; trainer_date?: string | null }>;
   assessmentSummaryData?: Record<string, string | null>;
 }): { html: string; unitCode: string; version: string; headerHtml: string } {
   function heightFromWordLimit(wordLimit: number | null | undefined): number {
@@ -333,6 +333,9 @@ export function buildHtml(data: {
     .result-sheet-table .result-radio { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; }
     .result-sheet-table .result-radio .radio-circle { width: 12px; height: 12px; border: 1.5px solid #374151; border-radius: 50%; flex-shrink: 0; }
     .result-sheet-table .result-radio .radio-circle.filled { background: #000000; border-color: #000000; }
+    .result-sheet-table .result-value-declaration { padding-bottom: 8px !important; }
+    .result-sheet-table .result-value-declaration ul:last-of-type { margin-bottom: 4px !important; }
+    .result-sheet-table .result-value-declaration p:last-child { margin-bottom: 0 !important; }
     .assessment-summary-page { page-break-before: always; page-break-after: always; page-break-inside: avoid; }
     .assessment-summary-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 11pt; padding: 10px 12px; text-align: center; margin: 0; border: 1px solid #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .assessment-summary-intro { background: #fff !important; color: #374151 !important; font-size: 8.5pt; padding: 8px 12px; margin: 0; line-height: 1.4; border: 1px solid #000; border-top: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -416,6 +419,7 @@ export function buildHtml(data: {
     .task-questions-table .task-q-answer-cell { background: #fff !important; padding: 24px 12px 12px 12px !important; vertical-align: top !important; }
     .task-questions-table .task-q-cell-lower { padding: 12px !important; vertical-align: top !important; }
     .task-questions-table .task-q-answer-cell .task-q-answer-block { border-top: none !important; }
+    .task-questions-table .task-q-answer-full { border-left: 1px solid #000 !important; width: 100%; }
     .task-questions-table .task-q-question-label { font-weight: bold; font-size: 11pt; margin-bottom: 8px; color: #000; white-space: pre-line; }
     .task-q-text-above-header { font-weight: bold; font-size: 11pt; margin-bottom: 8px; color: #000; }
     .task-q-content-block, .task-q-additional-grid { width: 100%; max-width: 100%; box-sizing: border-box; }
@@ -981,8 +985,7 @@ export function buildHtml(data: {
           html += '<div class="task-q-radio"><span class="radio-circle' + (satNo ? ' filled' : '') + '"></span>No</div></div>';
           html += '</td></tr>';
           html += '<tr class="task-q-row-bottom">';
-          html += '<td class="task-q-num-cell task-q-cell-lower">&nbsp;</td>';
-          html += '<td class="task-q-answer-cell">';
+          html += '<td colspan="3" class="task-q-answer-cell task-q-answer-full">';
           if (isGridTable) {
             const pm = (question.pdf_meta as Record<string, unknown>) || {};
             const cols = (Array.isArray(pm.columns) ? pm.columns : ['Column 1', 'Column 2']) as string[];
@@ -1105,7 +1108,6 @@ export function buildHtml(data: {
             }
           }
           html += '</td>';
-          html += '<td class="task-q-satisfactory-cell task-q-cell-lower">&nbsp;</td>';
           html += '</tr>';
           html += '</tbody></table>';
           html += '</div>';
@@ -1120,9 +1122,11 @@ export function buildHtml(data: {
         const f1n = rd?.first_attempt_satisfactory === 'ns';
         const f2s = rd?.second_attempt_satisfactory === 's';
         const f2n = rd?.second_attempt_satisfactory === 'ns';
+        const f3s = rd?.third_attempt_satisfactory === 's';
+        const f3n = rd?.third_attempt_satisfactory === 'ns';
         html += `<div class="result-sheet-page"><div class="task-results-header">${taskTitle} – Results Sheet</div>`;
         html += '<table class="result-sheet-table"><tbody>';
-        html += '<tr><td class="result-label" rowspan="2">Outcome</td><td class="result-value">';
+        html += '<tr><td class="result-label" rowspan="3">Outcome</td><td class="result-value">';
         html += '<div class="task-results-outcome-title">First attempt:</div>';
         html += '<div>Outcome (make sure to tick the correct checkbox):</div>';
         html += '<div style="margin: 6px 0;"><span class="result-radio"><span class="radio-circle' + (f1s ? ' filled' : '') + '"></span><span class="question-label">Satisfactory (S)</span></span><span class="result-radio"><span class="radio-circle' + (f1n ? ' filled' : '') + '"></span><span class="question-label">Not Satisfactory (NS)</span></span></div>';
@@ -1136,14 +1140,19 @@ export function buildHtml(data: {
         html += '<div style="margin: 8px 0;"><span class="question-label">Date:</span> <span class="answer-line-inline" style="min-width:120px;">' + (rd?.second_attempt_date ?? '') + '</span></div>';
         html += '<div class="question" style="margin: 8px 0;"><span class="question-label">Feedback:</span><div class="answer-box answer-box-large">' + (rd?.second_attempt_feedback ?? '') + '</div></div>';
         html += '</td></tr>';
-        html += '<tr><td class="result-label">Student Declaration</td><td class="result-value">';
+        html += '<tr><td class="result-value">';
+        html += '<div class="task-results-outcome-title">Third attempt:</div>';
+        html += '<div>Outcome (make sure to tick the correct checkbox):</div>';
+        html += '<div style="margin: 6px 0;"><span class="result-radio"><span class="radio-circle' + (f3s ? ' filled' : '') + '"></span><span class="question-label">Satisfactory (S)</span></span><span class="result-radio"><span class="radio-circle' + (f3n ? ' filled' : '') + '"></span><span class="question-label">Not Satisfactory (NS)</span></span></div>';
+        html += '<div style="margin: 8px 0;"><span class="question-label">Date:</span> <span class="answer-line-inline" style="min-width:120px;">' + (rd?.third_attempt_date ?? '') + '</span></div>';
+        html += '<div class="question" style="margin: 8px 0;"><span class="question-label">Feedback:</span><div class="answer-box answer-box-large">' + (rd?.third_attempt_feedback ?? '') + '</div></div>';
+        html += '</td></tr>';
+        html += '<tr><td class="result-label">Student Declaration</td><td class="result-value result-value-declaration">';
         html += '<ul style="margin: 8px 0; padding-left: 20px;"><li>I declare that the answers I have provided are my own work.</li><li>I have kept a copy of all relevant notes and reference material.</li><li>I have provided references for all sources where the information is not my own.</li>';
         html += '<li>For the purposes of assessment, I give the trainer/assessor permission to:<ul style="margin: 4px 0; padding-left: 20px;"><li>i. Reproduce this assessment and provide a copy to another member of the RTO for the purposes of assessment.</li><li>ii. Take steps to authenticate the assessment, including conducting a plagiarism check.</li></ul></li></ul>';
         html += '<p style="margin: 12px 0 4px 0;"><strong>I understand that if I disagree with the assessment outcome, I can appeal the assessment process, and either re-submit additional evidence undertake gap training and or have my submission re-assessed.</strong></p>';
-        html += '<p style="margin: 4px 0;"><strong>All appeal options have been explained to me.</strong></p>';
+        html += '<p style="margin: 4px 0 0 0;"><strong>All appeal options have been explained to me.</strong></p>';
         html += '</td></tr>';
-        html += '</tbody></table>';
-        html += '<table class="result-sheet-table"><tbody>';
         const studentNameDisplay = (() => {
           const rn = (rd?.student_name ?? '').trim();
           if (rn.length > 1) return rn;
@@ -1218,10 +1227,12 @@ export function buildHtml(data: {
           const f1n = rd?.first_attempt_satisfactory === 'ns';
           const f2s = rd?.second_attempt_satisfactory === 's';
           const f2n = rd?.second_attempt_satisfactory === 'ns';
+          const f3s = rd?.third_attempt_satisfactory === 's';
+          const f3n = rd?.third_attempt_satisfactory === 'ns';
           html += '<tr><td class="summary-label">' + tr.row_label + '</td>';
           html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f1s ? ' checked' : '') + '">' + (f1s ? '✓' : '') + '</span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f1n ? ' checked' : '') + '">' + (f1n ? '✓' : '') + '</span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line">' + (rd?.first_attempt_date ?? '') + '</span></div></td>';
           html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f2s ? ' checked' : '') + '">' + (f2s ? '✓' : '') + '</span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f2n ? ' checked' : '') + '">' + (f2n ? '✓' : '') + '</span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line">' + (rd?.second_attempt_date ?? '') + '</span></div></td>';
-          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb"></span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line"></span></div></td></tr>';
+          html += '<td class="summary-attempt-value summary-attempt-col"><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f3s ? ' checked' : '') + '">' + (f3s ? '✓' : '') + '</span> Satisfactory</div><div style="margin:2px 0;display:flex;align-items:center;gap:6px"><span class="summary-cb' + (f3n ? ' checked' : '') + '">' + (f3n ? '✓' : '') + '</span> Not Satisfactory</div><div style="margin-top:6px;font-size:8pt">Date: <span class="summary-date-line">' + (rd?.third_attempt_date ?? '') + '</span></div></td></tr>';
         }
         const fc1 = sum.final_attempt_1_result === 'competent';
         const fnc1 = sum.final_attempt_1_result === 'not_yet_competent';
@@ -1543,7 +1554,7 @@ export async function getPdfData(supabase: SupabaseClient, instanceId: number): 
   try {
     const { data: resultsRows } = await supabase
       .from('skyline_form_results_data')
-      .select('section_id, first_attempt_satisfactory, first_attempt_date, first_attempt_feedback, second_attempt_satisfactory, second_attempt_date, second_attempt_feedback, student_name, student_signature, trainer_name, trainer_signature, trainer_date')
+      .select('section_id, first_attempt_satisfactory, first_attempt_date, first_attempt_feedback, second_attempt_satisfactory, second_attempt_date, second_attempt_feedback, third_attempt_satisfactory, third_attempt_date, third_attempt_feedback, student_name, student_signature, trainer_name, trainer_signature, trainer_date')
       .eq('instance_id', instanceId);
     for (const r of (resultsRows as Record<string, unknown>[]) || []) {
       const sid = r.section_id as number;
@@ -1554,6 +1565,9 @@ export async function getPdfData(supabase: SupabaseClient, instanceId: number): 
         second_attempt_satisfactory: (r.second_attempt_satisfactory as string) ?? null,
         second_attempt_date: (r.second_attempt_date as string) ?? null,
         second_attempt_feedback: (r.second_attempt_feedback as string) ?? null,
+        third_attempt_satisfactory: (r.third_attempt_satisfactory as string) ?? null,
+        third_attempt_date: (r.third_attempt_date as string) ?? null,
+        third_attempt_feedback: (r.third_attempt_feedback as string) ?? null,
         student_name: (r.student_name as string) ?? null,
         student_signature: (r.student_signature as string) ?? null,
         trainer_name: (r.trainer_name as string) ?? null,

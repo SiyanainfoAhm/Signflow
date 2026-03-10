@@ -336,6 +336,9 @@ export interface ResultsDataEntry {
   second_attempt_satisfactory: string | null;
   second_attempt_date: string | null;
   second_attempt_feedback: string | null;
+  third_attempt_satisfactory: string | null;
+  third_attempt_date: string | null;
+  third_attempt_feedback: string | null;
   student_name: string | null;
   student_signature: string | null;
   trainer_name: string | null;
@@ -346,7 +349,7 @@ export interface ResultsDataEntry {
 export async function fetchResultsData(instanceId: number): Promise<Record<number, ResultsDataEntry>> {
   const { data, error } = await supabase
     .from('skyline_form_results_data')
-    .select('section_id, first_attempt_satisfactory, first_attempt_date, first_attempt_feedback, second_attempt_satisfactory, second_attempt_date, second_attempt_feedback, student_name, student_signature, trainer_name, trainer_signature, trainer_date')
+    .select('section_id, first_attempt_satisfactory, first_attempt_date, first_attempt_feedback, second_attempt_satisfactory, second_attempt_date, second_attempt_feedback, third_attempt_satisfactory, third_attempt_date, third_attempt_feedback, student_name, student_signature, trainer_name, trainer_signature, trainer_date')
     .eq('instance_id', instanceId);
   if (error) {
     console.error('fetchResultsData error', error);
@@ -363,6 +366,9 @@ export async function fetchResultsData(instanceId: number): Promise<Record<numbe
       second_attempt_satisfactory: (row.second_attempt_satisfactory as string) ?? null,
       second_attempt_date: (row.second_attempt_date as string) ?? null,
       second_attempt_feedback: (row.second_attempt_feedback as string) ?? null,
+      third_attempt_satisfactory: (row.third_attempt_satisfactory as string) ?? null,
+      third_attempt_date: (row.third_attempt_date as string) ?? null,
+      third_attempt_feedback: (row.third_attempt_feedback as string) ?? null,
       student_name: (row.student_name as string) ?? null,
       student_signature: (row.student_signature as string) ?? null,
       trainer_name: (row.trainer_name as string) ?? null,

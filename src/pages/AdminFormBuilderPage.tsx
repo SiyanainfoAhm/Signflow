@@ -618,7 +618,7 @@ export const AdminFormBuilderPage: React.FC = () => {
         if (!cancelled) setAssessmentTaskRows((data as AssessmentTaskRow[]) || []);
       });
     return () => { cancelled = true; };
-  }, [assessmentTasksGridQuestionId]);
+  }, [assessmentTasksGridQuestionId, steps]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -2339,8 +2339,12 @@ function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onSteps
     if (rowSaveTimers.current[rowId]) clearTimeout(rowSaveTimers.current[rowId]);
     delete rowSaveTimers.current[rowId];
     delete rowPendingUpdates.current[rowId];
-    await supabase.from('skyline_form_question_rows').update({ row_meta }).eq('id', rowId);
-    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, row_meta } : r)));
+    const updates: { row_meta: typeof row_meta; row_help?: string | null } = { row_meta };
+    if (data.assessment_type !== undefined) {
+      updates.row_help = data.assessment_type || null;
+    }
+    await supabase.from('skyline_form_question_rows').update(updates).eq('id', rowId);
+    setRows((prev) => prev.map((r) => (r.id === rowId ? { ...r, row_meta, row_help: updates.row_help ?? r.row_help } : r)));
   };
 
   const isAssessmentTasks = sectionPdfMode === 'assessment_tasks';
@@ -2469,6 +2473,7 @@ function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onSteps
           onClose={() => setInstructionsModalRow(null)}
           rowLabel={instructionsModalRow.row_label}
           initialData={(instructionsModalRow.row_meta as { instructions?: TaskInstructionsData })?.instructions}
+          rowHelpFallback={instructionsModalRow.row_help}
           onSave={(data) => saveInstructions(instructionsModalRow.id, data)}
         />
       )}

@@ -10,7 +10,7 @@ interface SectionInstructionsEditorProps {
 }
 
 export function SectionInstructionsEditor({ section, onSaved }: SectionInstructionsEditorProps) {
-  const [row, setRow] = useState<{ id: number; row_label: string; row_meta?: { instructions?: TaskInstructionsData } } | null>(null);
+  const [row, setRow] = useState<{ id: number; row_label: string; row_help?: string | null; row_meta?: { instructions?: TaskInstructionsData } } | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const rowId = (section as { assessment_task_row_id?: number | null }).assessment_task_row_id;
 
@@ -21,7 +21,7 @@ export function SectionInstructionsEditor({ section, onSaved }: SectionInstructi
     }
     supabase
       .from('skyline_form_question_rows')
-      .select('id, row_label, row_meta')
+      .select('id, row_label, row_help, row_meta')
       .eq('id', rowId)
       .single()
       .then(({ data }) => setRow(data as typeof row));
@@ -37,11 +37,10 @@ export function SectionInstructionsEditor({ section, onSaved }: SectionInstructi
 
   const handleSave = async (data: TaskInstructionsData) => {
     if (!rowId) return;
-    await supabase
-      .from('skyline_form_question_rows')
-      .update({ row_meta: { instructions: data } })
-      .eq('id', rowId);
-    setRow((prev) => (prev ? { ...prev, row_meta: { instructions: data } } : null));
+    const updates: { row_meta: { instructions: TaskInstructionsData }; row_help?: string | null } = { row_meta: { instructions: data } };
+    if (data.assessment_type !== undefined) updates.row_help = data.assessment_type || null;
+    await supabase.from('skyline_form_question_rows').update(updates).eq('id', rowId);
+    setRow((prev) => (prev ? { ...prev, row_meta: { instructions: data }, row_help: updates.row_help ?? prev.row_help } : null));
     setModalOpen(false);
     onSaved?.();
   };
@@ -61,6 +60,7 @@ export function SectionInstructionsEditor({ section, onSaved }: SectionInstructi
           onClose={() => setModalOpen(false)}
           rowLabel={row.row_label}
           initialData={row.row_meta?.instructions}
+          rowHelpFallback={row.row_help}
           onSave={handleSave}
         />
       )}

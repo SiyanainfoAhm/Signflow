@@ -298,16 +298,18 @@ export const InstanceFillPage: React.FC = () => {
     const raSigObj = raVal && typeof raVal === 'object' && !Array.isArray(raVal) ? (raVal as Record<string, unknown>) : null;
     const raTrainerDate = raSigObj ? String(raSigObj.date ?? raSigObj.signedAtDate ?? '') : '';
     const today = new Date().toISOString().split('T')[0];
-    const updates: { sectionId: number; field: 'trainer_date' | 'first_attempt_date' | 'second_attempt_date'; value: string }[] = [];
+    const updates: { sectionId: number; field: 'trainer_date' | 'first_attempt_date' | 'second_attempt_date' | 'third_attempt_date'; value: string }[] = [];
     for (const sectionId of taskResultSectionIds) {
       const rd = resultsData[sectionId];
       const firstTaskData = firstTaskSectionId && firstTaskSectionId !== sectionId ? resultsData[firstTaskSectionId] : null;
       const trainerDateVal = raTrainerDate || (firstTaskData?.trainer_date ?? today);
       const firstAttemptVal = raTrainerDate || (firstTaskData?.first_attempt_date ?? today);
       const secondAttemptVal = rd?.first_attempt_date || (firstTaskData?.second_attempt_date ?? today);
+      const thirdAttemptVal = rd?.second_attempt_date || (firstTaskData?.third_attempt_date ?? today);
       if (!rd?.trainer_date && trainerDateVal) updates.push({ sectionId, field: 'trainer_date', value: trainerDateVal });
       if (!rd?.first_attempt_date && firstAttemptVal) updates.push({ sectionId, field: 'first_attempt_date', value: firstAttemptVal });
       if (!rd?.second_attempt_date && secondAttemptVal) updates.push({ sectionId, field: 'second_attempt_date', value: secondAttemptVal });
+      if (!rd?.third_attempt_date && thirdAttemptVal) updates.push({ sectionId, field: 'third_attempt_date', value: thirdAttemptVal });
     }
     if (updates.length === 0) return;
     setResultsData((prev) => {
@@ -1012,12 +1014,19 @@ export const InstanceFillPage: React.FC = () => {
                             ? ((instr as { blocks?: Array<{ id?: string; type?: string; heading?: string; content?: string; columnHeaders?: string[]; rows?: Array<{ heading?: string; content?: string; cells?: string[] }> }> }).blocks || [])
                             : [];
                           if (customBlocks.length > 0) {
+                            const instrTyped = instr as { assessment_type?: string };
                             return (
                               <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                                 <div className="bg-[#5E5E5E] text-white font-bold px-4 py-3">
                                   Student Instructions: {taskRow?.row_label || section.title}
                                 </div>
                                 <div className="p-4 space-y-4">
+                                  {instrTyped.assessment_type && (
+                                    <div>
+                                      <div className="bg-gray-600 text-white font-semibold text-sm px-3 py-2 rounded-t">Assessment type</div>
+                                      <div className="border border-gray-200 border-t-0 rounded-b p-3 bg-gray-50 prose prose-sm max-w-none whitespace-pre-line">{instrTyped.assessment_type}</div>
+                                    </div>
+                                  )}
                                   {customBlocks.map((b, idx) => (
                                     <div key={String(b.id || idx)}>
                                       {b.type === 'table' && !!String(b.heading || '').trim() && (
@@ -1072,8 +1081,14 @@ export const InstanceFillPage: React.FC = () => {
                               </div>
                             );
                           }
+                          const escapeAndNlToBr = (s: string) =>
+                            String(s || '')
+                              .replace(/&/g, '&amp;')
+                              .replace(/</g, '&lt;')
+                              .replace(/>/g, '&gt;')
+                              .replace(/\n/g, '<br/>');
                           const blocks: { title: string; content: string }[] = [
-                            { title: 'Assessment type', content: String(instr.assessment_type || '') },
+                            { title: 'Assessment type', content: escapeAndNlToBr(String(instr.assessment_type || '')) },
                             { title: 'Instructions provided to the student:', content: String(instr.task_description || '') },
                             { title: 'Applicable conditions:', content: String(instr.applicable_conditions || '') },
                             { title: 'Resubmissions and reattempts:', content: String(instr.resubmissions || '') },
@@ -1449,7 +1464,7 @@ export const InstanceFillPage: React.FC = () => {
                             <table className="w-full border-collapse text-sm">
                               <tbody>
                                 <tr>
-                                  <td className="w-1/4 bg-gray-200 font-semibold text-gray-700 p-3 border border-gray-300 align-top" rowSpan={2}>
+                                  <td className="w-1/4 bg-gray-200 font-semibold text-gray-700 p-3 border border-gray-300 align-top" rowSpan={3}>
                                     Outcome
                                   </td>
                                   <td className="bg-white p-3 border border-gray-300 align-top">
@@ -1548,11 +1563,59 @@ export const InstanceFillPage: React.FC = () => {
                                   </td>
                                 </tr>
                                 <tr>
+                                  <td className="bg-white p-3 border border-gray-300 align-top">
+                                    <div className="font-semibold mb-2">Third attempt:</div>
+                                    <div className="mb-2">Outcome (make sure to tick the correct checkbox):</div>
+                                    <div className="flex gap-4 mb-2">
+                                      <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name={`results-${section.id}-third`}
+                                          checked={rd?.third_attempt_satisfactory === 's'}
+                                          onChange={() => trainerCanEdit && handleResultsDataChange(section.id, 'third_attempt_satisfactory', 's')}
+                                          disabled={!trainerCanEdit}
+                                          className="w-4 h-4"
+                                        />
+                                        <span>Satisfactory (S)</span>
+                                      </label>
+                                      <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name={`results-${section.id}-third`}
+                                          checked={rd?.third_attempt_satisfactory === 'ns'}
+                                          onChange={() => trainerCanEdit && handleResultsDataChange(section.id, 'third_attempt_satisfactory', 'ns')}
+                                          disabled={!trainerCanEdit}
+                                          className="w-4 h-4"
+                                        />
+                                        <span>Not Satisfactory (NS)</span>
+                                      </label>
+                                    </div>
+                                    <div className="mb-2"><span className="font-medium">Date:</span>{' '}
+                                      <DatePicker
+                                        value={rd?.third_attempt_date ?? ''}
+                                        onChange={(v) => handleResultsDataChange(section.id, 'third_attempt_date', v || null)}
+                                        disabled={!trainerCanEdit}
+                                        compact
+                                        placement="above"
+                                        className="inline-block min-w-[120px]"
+                                      />
+                                    </div>
+                                    <div><span className="font-medium">Feedback:</span>
+                                      <textarea
+                                        value={rd?.third_attempt_feedback ?? ''}
+                                        onChange={(e) => handleResultsDataChange(section.id, 'third_attempt_feedback', e.target.value || null)}
+                                        disabled={!trainerCanEdit}
+                                        className="block w-full border border-gray-300 min-h-[60px] p-2 mt-1 bg-gray-50 text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                      />
+                                    </div>
+                                  </td>
+                                </tr>
+                                <tr>
                                   <td className="bg-gray-200 font-semibold text-gray-700 p-3 border border-gray-300 align-top">
                                     Student Declaration
                                   </td>
-                                  <td className="bg-white p-3 border border-gray-300 align-top">
-                                    <ul className="list-disc pl-5 space-y-1 text-sm">
+                                  <td className="bg-white p-3 pb-2 border border-gray-300 align-top">
+                                    <ul className="list-disc pl-5 space-y-1 text-sm mb-2">
                                       <li>I declare that the answers I have provided are my own work.</li>
                                       <li>I have kept a copy of all relevant notes and reference material.</li>
                                       <li>I have provided references for all sources where the information is not my own.</li>
@@ -1772,7 +1835,7 @@ export const InstanceFillPage: React.FC = () => {
                                               <div className="flex flex-col gap-0.5 items-center"><span className="text-[10px]">{rd?.second_attempt_satisfactory === 's' ? '✓ Satisfactory' : rd?.second_attempt_satisfactory === 'ns' ? '✓ Not Satisfactory' : '—'}</span><span className="text-[10px]">Date: {rd?.second_attempt_date ?? '—'}</span></div>
                                             </td>
                                             <td className="border border-gray-400 p-1.5 text-center">
-                                              <div className="flex flex-col gap-0.5 items-center"><span className="text-[10px]">—</span><span className="text-[10px]">Date: —</span></div>
+                                              <div className="flex flex-col gap-0.5 items-center"><span className="text-[10px]">{rd?.third_attempt_satisfactory === 's' ? '✓ Satisfactory' : rd?.third_attempt_satisfactory === 'ns' ? '✓ Not Satisfactory' : '—'}</span><span className="text-[10px]">Date: {rd?.third_attempt_date ?? '—'}</span></div>
                                             </td>
                                           </tr>
                                         );
