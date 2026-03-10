@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Copy, ExternalLink, Send, RefreshCw, Ban, CheckCircle, User } from 'lucide-react';
-import { listSubmittedInstancesPaged, updateInstanceRole, issueInstanceAccessLink, revokeRoleAccessTokens, extendInstanceAccessTokens, allowStudentResubmission, listTrainers } from '../lib/formEngine';
+import { Copy, ExternalLink, Send, RefreshCw, Ban, CheckCircle, User, CalendarClock } from 'lucide-react';
+import { listSubmittedInstancesPaged, updateInstanceRole, issueInstanceAccessLink, getOrIssueInstanceAccessLink, revokeRoleAccessTokens, extendInstanceAccessTokens, extendInstanceAccessTokensToDate, allowStudentResubmission, listTrainers } from '../lib/formEngine';
 import type { SubmittedInstanceRow, Trainer } from '../lib/formEngine';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { DatePicker } from '../components/ui/DatePicker';
 import { Loader } from '../components/ui/Loader';
 import { Modal } from '../components/ui/Modal';
 import { toast } from '../utils/toast';
@@ -47,6 +48,9 @@ export const AdminAssessmentsPage: React.FC = () => {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [trainersLoading, setTrainersLoading] = useState(false);
   const [selectedTrainerId, setSelectedTrainerId] = useState<number | null>(null);
+  const [extendDeadlineRow, setExtendDeadlineRow] = useState<SubmittedInstanceRow | null>(null);
+  const [extendDeadlineNewDate, setExtendDeadlineNewDate] = useState('');
+  const [extending, setExtending] = useState(false);
 
   const loadRows = useCallback(async (page: number, search: string, opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -71,7 +75,7 @@ export const AdminAssessmentsPage: React.FC = () => {
   };
 
   const handleCopyLink = async (instanceId: number, roleContext: 'student' | 'trainer' | 'office') => {
-    const url = await issueInstanceAccessLink(instanceId, roleContext);
+    const url = await getOrIssueInstanceAccessLink(instanceId, roleContext);
     if (!url) {
       toast.error('Failed to create secure link');
       return;
@@ -104,6 +108,24 @@ export const AdminAssessmentsPage: React.FC = () => {
       setTrainers(list);
       setTrainersLoading(false);
     });
+  };
+
+  const openExtendDeadline = (row: SubmittedInstanceRow) => {
+    setExtendDeadlineRow(row);
+    setExtendDeadlineNewDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const handleExtendDeadlineConfirm = async () => {
+    if (!extendDeadlineRow || !extendDeadlineNewDate.trim()) return;
+    const newDate = extendDeadlineNewDate.trim();
+    const studentName = extendDeadlineRow.student_name;
+    setExtending(true);
+    await extendInstanceAccessTokensToDate(extendDeadlineRow.id, 'student', newDate);
+    setExtending(false);
+    setExtendDeadlineRow(null);
+    setExtendDeadlineNewDate('');
+    await loadRows(currentPage, searchTerm, { silent: true });
+    toast.success(`${studentName}'s submission deadline extended. They can access until ${newDate} 11:59 PM.`);
   };
 
   const handleSendToTrainerConfirm = async () => {
@@ -180,7 +202,7 @@ export const AdminAssessmentsPage: React.FC = () => {
                     <th className="py-3 pr-3">Form</th>
                     <th className="py-3 pr-3">Date</th>
                     <th className="py-3 pr-3 w-[140px]">Workflow</th>
-                    <th className="py-3 text-right min-w-[320px]">Actions</th>
+                    <th className="py-3 text-right min-w-[220px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -201,113 +223,52 @@ export const AdminAssessmentsPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-3 align-middle">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              const role = row.role_context === 'trainer' ? 'trainer' : row.role_context === 'office' ? 'office' : 'student';
-                              const url = await issueInstanceAccessLink(row.id, role);
-                              if (!url) {
-                                toast.error('Failed to open secure link');
-                                return;
-                              }
-                              window.open(url, '_blank');
-                            }}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                            <span>Open</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const role = row.role_context === 'trainer' ? 'trainer' : row.role_context === 'office' ? 'office' : 'student';
-                              handleCopyLink(row.id, role);
-                            }}
-                            className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                          >
-                            <Copy className="w-4 h-4" />
-                            <span>Copy Link</span>
-                          </Button>
-                          {!row.link_expired && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const role = row.role_context === 'trainer' ? 'trainer' : row.role_context === 'office' ? 'office' : 'student';
-                                void handleExpireLink(row.id, role);
-                              }}
-                              disabled={managingId === row.id}
-                              className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                              title="Revoke link access"
-                            >
-                              <Ban className="w-4 h-4" />
-                              <span>Expire</span>
-                            </Button>
-                          )}
-                          {row.link_expired && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const role = row.role_context === 'trainer' ? 'trainer' : row.role_context === 'office' ? 'office' : 'student';
-                                void handleEnableLink(row.id, role);
-                              }}
-                              disabled={managingId === row.id}
-                              className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                              title="Re-enable link (30 days) even if form date passed"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Enable</span>
-                            </Button>
-                          )}
-                          {row.status === 'submitted' && (row.role_context === 'trainer' || row.role_context === 'office') && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                setManagingId(row.id);
-                                await allowStudentResubmission(row.id);
-                                setManagingId(null);
-                                await loadRows(currentPage, searchTerm, { silent: true });
-                                const url = `${window.location.origin}/forms/${row.form_id}/student-access`;
-                                await navigator.clipboard.writeText(url);
-                                toast.success('Resubmission allowed. Generic link copied—student uses email and password.');
-                              }}
-                              disabled={managingId === row.id}
-                              className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                              title="Allow student to resubmit (2nd/3rd attempt)"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              <span>Allow Resubmission</span>
-                            </Button>
-                          )}
-                          {row.status === 'submitted' && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openSendToTrainer(row)}
-                              disabled={sendingId === row.id}
-                              className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                            >
-                              <Send className="w-4 h-4" />
-                              <span>
-                                {sendingId === row.id
-                                  ? 'Sending...'
-                                  : row.role_context === 'trainer'
-                                    ? 'Resend to Trainer'
-                                    : 'Send to Trainer'}
-                              </span>
-                            </Button>
-                          )}
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          {(() => {
+                            const actionBtn = 'group inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-[var(--brand)]/10 hover:border-[var(--brand)]/40 hover:text-[var(--brand)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-600 text-xs font-medium';
+                            const actionIcon = 'w-3 h-3 shrink-0';
+                            const actionText = 'max-w-0 overflow-hidden group-hover:max-w-[8rem] transition-all duration-200 whitespace-nowrap';
+                            return (
+                              <>
+                                <button type="button" onClick={async () => { const role = row.role_context === 'trainer' ? 'trainer' : row.role_context === 'office' ? 'office' : 'student'; const url = await getOrIssueInstanceAccessLink(row.id, role); if (!url) { toast.error('Failed to open secure link'); return; } window.open(url, '_blank'); }} className={actionBtn} title="Open">
+                                  <ExternalLink className={actionIcon} />
+                                  <span className={actionText}>Open</span>
+                                </button>
+                                <button type="button" onClick={() => { const role = row.role_context === 'trainer' ? 'trainer' : row.role_context === 'office' ? 'office' : 'student'; handleCopyLink(row.id, role); }} className={actionBtn} title="Copy Link">
+                                  <Copy className={actionIcon} />
+                                  <span className={actionText}>Copy Link</span>
+                                </button>
+                                {!row.link_expired && (
+                                  <button type="button" onClick={() => { const role = row.role_context === 'trainer' ? 'trainer' : row.role_context === 'office' ? 'office' : 'student'; void handleExpireLink(row.id, role); }} disabled={managingId === row.id} className={actionBtn} title="Revoke link access">
+                                    <Ban className={actionIcon} />
+                                    <span className={actionText}>Expire</span>
+                                  </button>
+                                )}
+                                {row.link_expired && (
+                                  <button type="button" onClick={() => { const role = row.role_context === 'trainer' ? 'trainer' : row.role_context === 'office' ? 'office' : 'student'; void handleEnableLink(row.id, role); }} disabled={managingId === row.id} className={actionBtn} title="Re-enable link (30 days)">
+                                    <CheckCircle className={actionIcon} />
+                                    <span className={actionText}>Enable</span>
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => openExtendDeadline(row)} className={actionBtn} title="Extend submission deadline">
+                                  <CalendarClock className={actionIcon} />
+                                  <span className={actionText}>Extend Deadline</span>
+                                </button>
+                                {row.status === 'submitted' && (row.role_context === 'trainer' || row.role_context === 'office') && (
+                                  <button type="button" onClick={async () => { setManagingId(row.id); await allowStudentResubmission(row.id); setManagingId(null); await loadRows(currentPage, searchTerm, { silent: true }); const url = `${window.location.origin}/forms/${row.form_id}/student-access`; await navigator.clipboard.writeText(url); toast.success('Resubmission allowed. Generic link copied—student uses email and password.'); }} disabled={managingId === row.id} className={actionBtn} title="Allow student to resubmit">
+                                    <CheckCircle className={actionIcon} />
+                                    <span className={actionText}>Allow Resubmission</span>
+                                  </button>
+                                )}
+                                {row.status === 'submitted' && (
+                                  <button type="button" onClick={() => openSendToTrainer(row)} disabled={sendingId === row.id} className={actionBtn} title={row.role_context === 'trainer' ? 'Resend to Trainer' : 'Send to Trainer'}>
+                                    <Send className={actionIcon} />
+                                    <span className={actionText}>{sendingId === row.id ? 'Sending...' : row.role_context === 'trainer' ? 'Resend to Trainer' : 'Send to Trainer'}</span>
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
@@ -380,7 +341,7 @@ export const AdminAssessmentsPage: React.FC = () => {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 truncate">{t.full_name}</div>
+                        <div className="font-medium text-gray-900 truncate">{t.full_name}{t.role && <span className="ml-2 text-xs font-normal text-gray-500 capitalize">({t.role})</span>}</div>
                         <div className="text-xs text-gray-500 truncate">{t.email}</div>
                       </div>
                       <User className="w-4 h-4 text-gray-400 shrink-0" />
@@ -403,6 +364,57 @@ export const AdminAssessmentsPage: React.FC = () => {
                     <Copy className="w-4 h-4" />
                   )}
                   <span>{sendingId === sendToTrainerRow.id ? 'Copying...' : 'Copy Link & Close'}</span>
+                </Button>
+              </div>
+            </div>
+          )}
+        </Modal>
+
+        <Modal
+          isOpen={!!extendDeadlineRow}
+          onClose={() => {
+            setExtendDeadlineRow(null);
+            setExtendDeadlineNewDate('');
+          }}
+          title="Extend submission deadline (this instance only)"
+          size="md"
+        >
+          {extendDeadlineRow && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Extend <strong>{extendDeadlineRow.student_name}</strong>'s submission deadline for <strong>{extendDeadlineRow.form_name}</strong>. Only this student is affected.
+              </p>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">New deadline (end of day)</label>
+                <DatePicker
+                  value={extendDeadlineNewDate}
+                  onChange={(v) => setExtendDeadlineNewDate(v || '')}
+                  className="max-w-[180px]"
+                  fromYear={new Date().getFullYear()}
+                  toYear={new Date().getFullYear() + 2}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setExtendDeadlineRow(null);
+                    setExtendDeadlineNewDate('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleExtendDeadlineConfirm}
+                  disabled={!extendDeadlineNewDate.trim() || extending}
+                  className="inline-flex items-center gap-2"
+                >
+                  {extending ? (
+                    <Loader variant="dots" size="sm" inline />
+                  ) : (
+                    <CalendarClock className="w-4 h-4" />
+                  )}
+                  <span>{extending ? 'Updating...' : 'Extend deadline'}</span>
                 </Button>
               </div>
             </div>

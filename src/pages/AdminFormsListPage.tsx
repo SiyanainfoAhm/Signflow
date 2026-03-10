@@ -227,7 +227,7 @@ export const AdminFormsListPage: React.FC = () => {
                   className="inline-flex items-center justify-center gap-2 whitespace-nowrap"
                 >
                   <Plus className="w-4 h-4 shrink-0" />
-                  <span>Add assignment</span>
+                  <span>Add Assessment</span>
                 </Button>
               </div>
               <div className="space-y-3">

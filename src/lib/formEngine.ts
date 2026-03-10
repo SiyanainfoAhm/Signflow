@@ -627,6 +627,72 @@ export async function createFormInstance(
 
 export type InstanceAccessRole = 'student' | 'trainer' | 'office';
 
+const MELBOURNE_TZ = 'Australia/Melbourne';
+
+/** Get current date and time in Melbourne (YYYY-MM-DD, hour, minute, second). */
+function getMelbourneNow(): { dateStr: string; hour: number; minute: number; second: number } {
+  const d = new Date();
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: MELBOURNE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '0';
+  const m = get('month').padStart(2, '0');
+  const day = get('day').padStart(2, '0');
+  return {
+    dateStr: `${get('year')}-${m}-${day}`,
+    hour: Number(get('hour')),
+    minute: Number(get('minute')),
+    second: Number(get('second')),
+  };
+}
+
+/** True if current Melbourne time is within [start_date 0:00, end_date 23:59:59]. Dates are YYYY-MM-DD. Treats empty string as unset. */
+function isWithinFormWindowMelbourne(startDate: string | null, endDate: string | null): boolean {
+  const start = (startDate ?? '').trim() || null;
+  const end = (endDate ?? '').trim() || null;
+  const now = getMelbourneNow();
+  if (start && now.dateStr < start) return false;
+  if (end && now.dateStr > end) return false;
+  return true;
+}
+
+/** UTC timestamp for end_date 23:59:59.999 in Melbourne. */
+function getMelbourneEndOfDayUTC(dateStr: string): number {
+  const d1 = new Date(dateStr + 'T12:59:59.999Z');
+  const d2 = new Date(dateStr + 'T13:59:59.999Z');
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: MELBOURNE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const toParts = (d: Date) => {
+    const p = fmt.formatToParts(d);
+    const get = (t: string) => p.find((x) => x.type === t)?.value ?? '0';
+    return {
+      date: `${get('year')}-${get('month').padStart(2, '0')}-${get('day').padStart(2, '0')}`,
+      hour: Number(get('hour')),
+      min: Number(get('minute')),
+    };
+  };
+  const r1 = toParts(d1);
+  const r2 = toParts(d2);
+  if (r1.date === dateStr && r1.hour === 23 && r1.min === 59) return d1.getTime();
+  if (r2.date === dateStr && r2.hour === 23 && r2.min === 59) return d2.getTime();
+  return d2.getTime();
+}
+
 export interface InstanceAccessValidationResult {
   valid: boolean;
   role_context: InstanceAccessRole | null;
@@ -640,23 +706,71 @@ function generateAccessToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Get an existing valid (non-revoked, not expired) token URL for instance+role, or null if none. */
+export async function getExistingInstanceAccessLink(
+  instanceId: number,
+  roleContext: InstanceAccessRole
+): Promise<string | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('skyline_instance_access_tokens')
+    .select('token')
+    .eq('instance_id', instanceId)
+    .eq('role_context', roleContext)
+    .is('revoked_at', null)
+    .is('consumed_at', null)
+    .gt('expires_at', now)
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const t = (data as { token: string }).token;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/instances/${instanceId}?token=${encodeURIComponent(t)}`;
+}
+
+/** Get existing valid link or issue a new one. Prevents overwriting student token when admin opens. */
+export async function getOrIssueInstanceAccessLink(
+  instanceId: number,
+  roleContext: InstanceAccessRole
+): Promise<string | null> {
+  const existing = await getExistingInstanceAccessLink(instanceId, roleContext);
+  if (existing) return existing;
+  return issueInstanceAccessLink(instanceId, roleContext);
+}
+
 export async function issueInstanceAccessLink(
   instanceId: number,
   roleContext: InstanceAccessRole,
-  ttlMinutes?: number
+  ttlMinutes?: number,
+  /** When true (resubmission), use extended expiry instead of form end_date. */
+  useResubmissionExpiry?: boolean,
+  /** When provided (resubmission), use this expiry to align with admin-extended submission deadline. */
+  resubmissionExpiresAt?: string
 ): Promise<string | null> {
   const token = generateAccessToken();
   let expiresAt: string;
   const { data: instance } = await supabase.from('skyline_form_instances').select('form_id').eq('id', instanceId).single();
-  if (instance) {
-    const { data: form } = await supabase.from('skyline_forms').select('end_date').eq('id', (instance as { form_id: number }).form_id).single();
-    const endDate = form && (form as { end_date: string | null }).end_date;
-    if (endDate) {
-      const d = new Date(endDate + 'T23:59:59.999Z');
-      expiresAt = d.toISOString();
+  const isTrainerOrOffice = roleContext === 'trainer' || roleContext === 'office';
+  if (instance && !useResubmissionExpiry) {
+    if (isTrainerOrOffice) {
+      const { data: form } = await supabase.from('skyline_forms').select('end_date').eq('id', (instance as { form_id: number }).form_id).single();
+      const endDate = form && (form as { end_date: string | null }).end_date;
+      const base90 = Date.now() + 90 * 24 * 60 * 60 * 1000;
+      const formEndMs = endDate ? getMelbourneEndOfDayUTC(endDate) + 14 * 24 * 60 * 60 * 1000 : 0;
+      expiresAt = new Date(Math.max(base90, formEndMs || base90)).toISOString();
     } else {
-      expiresAt = new Date(Date.now() + (ttlMinutes ?? 60 * 24 * 7) * 60 * 1000).toISOString();
+      const { data: form } = await supabase.from('skyline_forms').select('end_date').eq('id', (instance as { form_id: number }).form_id).single();
+      const endDate = form && (form as { end_date: string | null }).end_date;
+      if (endDate) {
+        const utcMs = getMelbourneEndOfDayUTC(endDate);
+        expiresAt = new Date(utcMs).toISOString();
+      } else {
+        expiresAt = new Date(Date.now() + (ttlMinutes ?? 60 * 24 * 7) * 60 * 1000).toISOString();
+      }
     }
+  } else if (useResubmissionExpiry) {
+    expiresAt = resubmissionExpiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   } else {
     expiresAt = new Date(Date.now() + (ttlMinutes ?? 60 * 24 * 7) * 60 * 1000).toISOString();
   }
@@ -704,6 +818,28 @@ export async function validateInstanceAccessToken(
   if (!expiresAt || Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
     return { valid: false, role_context: null, tokenId: Number(row.id ?? 0) || null, reason: 'This secure link has expired.' };
   }
+
+  if (role === 'student') {
+    const { data: inst } = await supabase.from('skyline_form_instances').select('form_id').eq('id', instanceId).single();
+    if (inst) {
+      const { data: form } = await supabase.from('skyline_forms').select('start_date, end_date').eq('id', (inst as { form_id: number }).form_id).single();
+      const startDate = (form as { start_date?: string | null } | null)?.start_date ?? null;
+      const endDate = (form as { end_date?: string | null } | null)?.end_date ?? null;
+      const formWindowClosed = !isWithinFormWindowMelbourne(startDate, endDate);
+      const formEndMs = endDate ? getMelbourneEndOfDayUTC(endDate) : 0;
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+      const isExtendedToken = endDate && expiresAt > formEndMs + ONE_DAY_MS;
+      if (formWindowClosed && !isExtendedToken) {
+        return {
+          valid: false,
+          role_context: null,
+          tokenId: Number(row.id ?? 0) || null,
+          reason: 'This form is only available between the start and end dates. The access period has not started or has ended.',
+        };
+      }
+    }
+  }
+
   return {
     valid: true,
     role_context: role,
@@ -764,6 +900,23 @@ export async function extendInstanceAccessTokens(instanceId: number, roleContext
   if (error) console.error('extendInstanceAccessTokens error', error);
 }
 
+/** Extend this instance's tokens to a specific end date (Melbourne end-of-day). For per-instance submission deadline only. */
+export async function extendInstanceAccessTokensToDate(
+  instanceId: number,
+  roleContext: InstanceAccessRole,
+  endDateStr: string
+): Promise<void> {
+  const utcMs = getMelbourneEndOfDayUTC(endDateStr);
+  const newExpiresAt = new Date(utcMs).toISOString();
+  const { error } = await supabase
+    .from('skyline_instance_access_tokens')
+    .update({ revoked_at: null, expires_at: newExpiresAt })
+    .eq('instance_id', instanceId)
+    .eq('role_context', roleContext)
+    .is('consumed_at', null);
+  if (error) console.error('extendInstanceAccessTokensToDate error', error);
+}
+
 /** Allow student resubmission: set instance back to draft, role to student, and re-enable student link. For 2nd/3rd attempts. */
 export async function allowStudentResubmission(instanceId: number): Promise<void> {
   await supabase.from('skyline_form_instances').update({ status: 'draft', role_context: 'student' }).eq('id', instanceId);
@@ -792,12 +945,17 @@ export async function studentLoginForForm(formId: number, email: string, passwor
   }
   const studentId = rows[0].id;
 
-  let instance = await getInstanceForStudentAndForm(formId, studentId);
+  const instance = await getInstanceForStudentAndForm(formId, studentId);
   if (!instance) {
-    const created = await createFormInstance(formId, 'student', studentId);
-    if (!created) return { success: false, error: 'Failed to create form instance.' };
-    instance = { id: created.id };
+    return {
+      success: false,
+      error: "You don't have access to this form. Ask your admin to send it to you.",
+    };
   }
+
+  const { data: form } = await supabase.from('skyline_forms').select('start_date, end_date').eq('id', formId).single();
+  const startDate = (form as { start_date?: string | null } | null)?.start_date ?? null;
+  const endDate = (form as { end_date?: string | null } | null)?.end_date ?? null;
 
   const { data: instRow } = await supabase
     .from('skyline_form_instances')
@@ -806,6 +964,36 @@ export async function studentLoginForForm(formId: number, email: string, passwor
     .single();
   const status = (instRow as { status?: string } | null)?.status ?? 'draft';
   const hasSubmittedBefore = !!(instRow as { submitted_at?: string } | null)?.submitted_at;
+  const isResubmission = hasSubmittedBefore && status === 'draft';
+
+  const formWindowOpen = isWithinFormWindowMelbourne(startDate, endDate);
+  let hasAdminExtendedAccess = false;
+  let resubmissionExpiresAt: string | undefined;
+  if (!formWindowOpen && endDate && (endDate ?? '').trim()) {
+    const formEndMs = getMelbourneEndOfDayUTC(endDate);
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const { data: tokens } = await supabase
+      .from('skyline_instance_access_tokens')
+      .select('expires_at')
+      .eq('instance_id', instance.id)
+      .eq('role_context', 'student');
+    const tokenRows = (tokens as Array<{ expires_at: string }> | null) ?? [];
+    const extended = tokenRows.filter((t) => t.expires_at && new Date(t.expires_at).getTime() > formEndMs + ONE_DAY_MS);
+    hasAdminExtendedAccess = extended.length > 0;
+    if (extended.length > 0) {
+      const maxExpiry = Math.max(...extended.map((t) => new Date(t.expires_at!).getTime()));
+      resubmissionExpiresAt = new Date(maxExpiry).toISOString();
+    }
+  }
+
+  if (!formWindowOpen && !isResubmission && !hasAdminExtendedAccess) {
+    return {
+      success: false,
+      error: 'This form is only available between the start and end dates. Please try again within the access period.',
+    };
+  }
+
+  const useExtendedExpiry = isResubmission || hasAdminExtendedAccess;
 
   if (hasSubmittedBefore && status !== 'draft') {
     const { data: allTokens } = await supabase
@@ -825,7 +1013,7 @@ export async function studentLoginForForm(formId: number, email: string, passwor
     }
   }
 
-  const url = await issueInstanceAccessLink(instance.id, 'student');
+  const url = await issueInstanceAccessLink(instance.id, 'student', undefined, useExtendedExpiry, resubmissionExpiresAt);
   if (!url) return { success: false, error: 'Failed to generate access link.' };
   return { success: true, url, instanceId: instance.id };
 }
@@ -847,6 +1035,7 @@ export interface Trainer {
   email: string;
   phone: string | null;
   status: string | null;
+  role?: string;
   created_at: string;
 }
 
@@ -968,6 +1157,7 @@ function mapTrainerRow(row: Record<string, unknown>): Trainer {
     email: String(row.email ?? ''),
     phone: row.phone ? String(row.phone) : null,
     status: row.status ? String(row.status) : null,
+    role: row.role ? String(row.role) : undefined,
     created_at: String(row.created_at ?? ''),
   };
 }

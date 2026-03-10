@@ -449,6 +449,20 @@ export const InstanceFillPage: React.FC = () => {
     return false;
   }, [role, workflowStatus]);
 
+  /** True when student is resubmitting after trainer sent back; parts marked Satisfactory Yes become read-only */
+  const isResubmissionAfterTrainer = useMemo(
+    () =>
+      role === 'student' &&
+      workflowStatus === 'draft' &&
+      (Object.keys(trainerAssessments).length > 0 || Object.keys(trainerRowAssessments).length > 0),
+    [role, workflowStatus, trainerAssessments, trainerRowAssessments]
+  );
+
+  const isQuestionReadOnlyByTrainer = useCallback(
+    (questionId: number) => isResubmissionAfterTrainer && trainerAssessments[questionId] === 'yes',
+    [isResubmissionAfterTrainer, trainerAssessments]
+  );
+
   const workflowLabel = useMemo(() => {
     if (workflowStatus === 'draft') return 'Draft';
     if (workflowStatus === 'waiting_trainer') return 'Waiting for trainer check';
@@ -520,7 +534,8 @@ export const InstanceFillPage: React.FC = () => {
         for (const q of section.questions) {
           if (q.type === 'instruction_block' || q.type === 'page_break') continue;
           if (!isRoleVisible((q.role_visibility as Record<string, boolean>) || {}, role)) continue;
-          const editable = isRoleEditable((q.role_editability as Record<string, boolean>) || {}, role) && canRoleEditCurrentWorkflow;
+          const baseEditable = isRoleEditable((q.role_editability as Record<string, boolean>) || {}, role) && canRoleEditCurrentWorkflow;
+          const editable = baseEditable && !isQuestionReadOnlyByTrainer(q.id);
           if (!q.required || !editable) continue;
           const key = getAnswerKey(q.id, null);
           const val = answers[key];
@@ -533,7 +548,7 @@ export const InstanceFillPage: React.FC = () => {
       setErrors(stepErrors);
       return Object.keys(stepErrors).length === 0;
     },
-    [template, role, answers, canRoleEditCurrentWorkflow]
+    [template, role, answers, canRoleEditCurrentWorkflow, isQuestionReadOnlyByTrainer]
   );
 
   if (loading) {
@@ -1110,7 +1125,8 @@ export const InstanceFillPage: React.FC = () => {
                                     .filter((q) => q.type !== 'instruction_block' && q.type !== 'page_break' && !(q.pdf_meta as Record<string, unknown>)?.isAdditionalBlockOf && isRoleVisible((q.role_visibility as Record<string, boolean>) || {}, role))
                                     .map((q) => {
                                       const re = (q.role_editability as Record<string, boolean>) || {};
-                                      const editable = isRoleEditable(re, role) && canRoleEditCurrentWorkflow;
+                                      const baseEditable = isRoleEditable(re, role) && canRoleEditCurrentWorkflow;
+                                      const editable = baseEditable && !isQuestionReadOnlyByTrainer(q.id);
                                       const trainerEditable = role === 'trainer' || role === 'office';
                                       const pm = (q.pdf_meta as Record<string, unknown>) || {};
                                       const textAboveHeader = String(pm.textAboveHeader ?? '').trim();
@@ -1167,6 +1183,7 @@ export const InstanceFillPage: React.FC = () => {
                                               showRowAssessmentColumn={true}
                                               rowAssessments={rowAssessForChild}
                                               onRowAssessmentChange={trainerEditable ? (rid, sat) => handleTrainerRowAssessmentChange(childQ.id, rid, sat) : undefined}
+                                              studentResubmissionReadOnlyForSatisfactoryRows={isResubmissionAfterTrainer}
                                             />
                                           ));
                                         }
@@ -1221,6 +1238,7 @@ export const InstanceFillPage: React.FC = () => {
                                                     showRowAssessmentColumn={true}
                                                     rowAssessments={rowAssessForQ}
                                                     onRowAssessmentChange={trainerEditable ? (rid, sat) => handleTrainerRowAssessmentChange(q.id, rid, sat) : undefined}
+                                                    studentResubmissionReadOnlyForSatisfactoryRows={isResubmissionAfterTrainer}
                                                   />
                                                 );
                                               })()
@@ -1262,7 +1280,8 @@ export const InstanceFillPage: React.FC = () => {
                                   .filter((q) => q.type !== 'instruction_block' && q.type !== 'page_break' && !(q.pdf_meta as Record<string, unknown>)?.isAdditionalBlockOf && isRoleVisible((q.role_visibility as Record<string, boolean>) || {}, role))
                                   .map((q, qIdx) => {
                                     const re = (q.role_editability as Record<string, boolean>) || {};
-                                    const editable = isRoleEditable(re, role) && canRoleEditCurrentWorkflow;
+                                    const baseEditable = isRoleEditable(re, role) && canRoleEditCurrentWorkflow;
+                                    const editable = baseEditable && !isQuestionReadOnlyByTrainer(q.id);
                                     const trainerEditable = role === 'trainer' || role === 'office';
                                     const sat = trainerAssessments[q.id];
                                     const satYes = sat === 'yes';
@@ -1315,7 +1334,7 @@ export const InstanceFillPage: React.FC = () => {
                                                     handleAnswerChange(childQ.id, rowId, rowData);
                                                   }
                                                 };
-                                                return wrapWithHeader(key, block.headerText, <QuestionRenderer question={childQ} value={Object.keys(merged).length ? merged : null} onChange={onGridChange} disabled={!editable} error={errors[`q-${childQ.id}`]} />);
+                                                return wrapWithHeader(key, block.headerText, <QuestionRenderer question={childQ} value={Object.keys(merged).length ? merged : null} onChange={onGridChange} disabled={!editable} error={errors[`q-${childQ.id}`]} studentResubmissionReadOnlyForSatisfactoryRows={isResubmissionAfterTrainer} />);
                                               }
                                               if (block.type === 'short_text' || block.type === 'long_text') {
                                                 const val = answers[getAnswerKey(childQ.id, null)] as string | undefined;
@@ -1349,7 +1368,7 @@ export const InstanceFillPage: React.FC = () => {
                                                         handleAnswerChange(q.id, rowId, rowData);
                                                       }
                                                     };
-                                                    return <QuestionRenderer question={q} value={Object.keys(merged).length ? merged : null} onChange={onGridChange} disabled={!editable} error={errors[`q-${q.id}`]} />;
+                                                    return <QuestionRenderer question={q} value={Object.keys(merged).length ? merged : null} onChange={onGridChange} disabled={!editable} error={errors[`q-${q.id}`]} studentResubmissionReadOnlyForSatisfactoryRows={isResubmissionAfterTrainer} />;
                                                   })()
                                                 ) : (
                                                   <QuestionRenderer question={q} value={(answers[getAnswerKey(q.id, null)] as string | number | boolean | Record<string, unknown> | string[] | undefined) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string | number | boolean | Record<string, unknown> | string[])} disabled={!editable} error={errors[`q-${q.id}`]} />

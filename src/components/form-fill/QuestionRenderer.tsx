@@ -33,6 +33,8 @@ interface QuestionRendererProps {
   showRowAssessmentColumn?: boolean;
   rowAssessments?: Record<number, string>;
   onRowAssessmentChange?: (rowId: number, satisfactory: 'yes' | 'no') => void;
+  /** When true (student resubmission), grid rows where trainer marked satisfactory='yes' become read-only */
+  studentResubmissionReadOnlyForSatisfactoryRows?: boolean;
 }
 
 export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
@@ -45,6 +47,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   showRowAssessmentColumn,
   rowAssessments,
   onRowAssessmentChange,
+  studentResubmissionReadOnlyForSatisfactoryRows,
 }) => {
   const pm = (question.pdf_meta as Record<string, unknown>) || {};
   const wordLimit = normalizeWordLimit(pm.wordLimit);
@@ -88,6 +91,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         showRowAssessmentColumn={showRowAssessmentColumn}
         rowAssessments={rowAssessments}
         onRowAssessmentChange={onRowAssessmentChange}
+        studentResubmissionReadOnlyForSatisfactoryRows={studentResubmissionReadOnlyForSatisfactoryRows}
       />
     );
   }

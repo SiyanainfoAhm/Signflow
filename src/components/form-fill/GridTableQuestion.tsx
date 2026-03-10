@@ -12,6 +12,8 @@ interface GridTableQuestionProps {
   showRowAssessmentColumn?: boolean;
   rowAssessments?: Record<number, string>;
   onRowAssessmentChange?: (rowId: number, satisfactory: 'yes' | 'no') => void;
+  /** When true (student resubmission), rows where trainer marked satisfactory='yes' become read-only */
+  studentResubmissionReadOnlyForSatisfactoryRows?: boolean;
 }
 
 type GridColumnType = 'question' | 'answer';
@@ -81,6 +83,7 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
   showRowAssessmentColumn,
   rowAssessments = {},
   onRowAssessmentChange,
+  studentResubmissionReadOnlyForSatisfactoryRows,
 }) => {
   const pm = (question.pdf_meta as Record<string, unknown>) || {};
   const columnsMeta = getGridColumnsMeta(pm);
@@ -133,6 +136,7 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
     const boxHeight = wordLimit ? heightFromWordLimit(wordLimit) : null;
     const cellVal = getCellValue(row.id, colIndex);
     const wordCount = cellVal.trim() ? cellVal.trim().split(/\s+/).length : 0;
+    const rowReadOnly = !!studentResubmissionReadOnlyForSatisfactoryRows && rowAssessments[row.id] === 'yes';
     return (
       <td key={colIndex} className={cellClass}>
         <textarea
@@ -145,7 +149,7 @@ export const GridTableQuestion: React.FC<GridTableQuestionProps> = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.stopPropagation();
           }}
-          disabled={disabled}
+          disabled={disabled || rowReadOnly}
           rows={wordLimit ? Math.max(1, Math.min(6, Math.ceil(wordLimit / 10))) : 1}
           className={`w-full px-2 py-1.5 text-sm bg-transparent border-none border-b border-gray-300 focus:border-[var(--brand)] focus:outline-none ${wordLimit ? 'resize-none' : ''}`}
           style={boxHeight ? { minHeight: boxHeight, maxHeight: boxHeight, height: boxHeight } : { minHeight: 34 }}
