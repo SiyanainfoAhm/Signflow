@@ -88,11 +88,6 @@ export function isBracketOnlyText(text: string): boolean {
   return /^\([^)]{1,80}\)\s*$/.test(t);
 }
 
-// Legacy alias
-function isParentheticalFragment(line: string): boolean {
-  return isBracketOnlyText(line);
-}
-
 function isParentheticalCell(cell: string): boolean {
   const t = (cell ?? '').trim();
   return t.startsWith('(') && t.includes(')');
@@ -177,7 +172,7 @@ function shouldAppendToDescription(
 }
 
 /** Check if line matches full assessment row structure (row id + label + content), not just a list item. */
-function isTrueAssessmentRowStart(cells: string[], useTabs: boolean): boolean {
+function isTrueAssessmentRowStart(cells: string[], _useTabs: boolean): boolean {
   if (cells.length < 2) return false;
   const first = (cells[0] ?? '').trim();
   const second = (cells[1] ?? '').trim();

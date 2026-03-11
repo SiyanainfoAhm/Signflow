@@ -9,7 +9,8 @@ import {
   getFormsForCourse,
   listForms,
 } from '../lib/formEngine';
-import type { Course, Form } from '../lib/formEngine';
+import type { Course } from '../lib/formEngine';
+import type { Form } from '../types/database';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
