@@ -518,7 +518,7 @@ function buildHtml(data: {
     .result-sheet-page { page-break-before: always; }
     .result-sheet-main { page-break-inside: avoid; break-inside: avoid; }
     .result-sheet-office { page-break-before: auto; }
-    .task-results-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 16pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; padding: 10px 16px; margin: 0 0 8px 0; }
+    .task-results-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 16pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; padding: 10px 16px; margin: 0 0 8px 0; page-break-after: avoid; break-after: avoid; }
     .task-results-outcome { margin: 12px 0; }
     .task-results-outcome-title { font-weight: bold; margin-bottom: 6px; }
     .result-sheet-table { width: 100%; border-collapse: collapse; font-size: 12pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; margin: 0 0 12px 0; border: 1px solid #000; }

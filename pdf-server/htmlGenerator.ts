@@ -320,7 +320,8 @@ export function buildHtml(data: {
     .task-instructions-block-content ul { margin: 8px 0; padding-left: 20px; }
     .task-instructions-block-content p { margin: 6px 0; }
     .result-sheet-page { page-break-before: always; }
-    .task-results-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 16pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; padding: 12px 16px; margin: 16px 0 0 0; }
+    .result-sheet-main { page-break-inside: avoid; break-inside: avoid; }
+    .task-results-header { background: #595959 !important; color: #fff !important; font-weight: bold; font-size: 16pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; padding: 12px 16px; margin: 16px 0 0 0; page-break-after: avoid; break-after: avoid; }
     .task-results-outcome { margin: 12px 0; }
     .task-results-outcome-title { font-weight: bold; margin-bottom: 6px; }
     .result-sheet-table { width: 100%; border-collapse: collapse; font-size: 12pt; font-family: 'Calibri', 'Calibri Light', Arial, sans-serif; margin: 0 0 12px 0; border: 1px solid #000; }
@@ -1128,7 +1129,7 @@ export function buildHtml(data: {
         const f2n = rd?.second_attempt_satisfactory === 'ns';
         const f3s = rd?.third_attempt_satisfactory === 's';
         const f3n = rd?.third_attempt_satisfactory === 'ns';
-        html += `<div class="result-sheet-page"><div class="task-results-header">${taskTitle} – Results Sheet</div>`;
+        html += `<div class="result-sheet-page"><div class="result-sheet-main"><div class="task-results-header">${taskTitle} – Results Sheet</div>`;
         html += '<table class="result-sheet-table"><tbody>';
         html += '<tr><td class="result-label" rowspan="3">Outcome</td><td class="result-value">';
         html += '<div class="task-results-outcome-title">First attempt:</div>';
@@ -1182,7 +1183,7 @@ export function buildHtml(data: {
         html += '<tr><td class="result-label decl-office-label">Office Use Only</td><td class="result-value">';
         html += 'The outcome of this assessment has been entered into the Student Management System on <span class="answer-line-inline">' + officeDate + '</span> (insert date) by <span class="answer-line-inline">' + officeName + '</span> (insert Name)';
         html += '</td></tr>';
-        html += '</tbody></table></div>';
+        html += '</tbody></table></div></div>';
       } else if (section.pdf_render_mode === 'assessment_summary' || section.title === 'Assessment Summary Sheet') {
         const taskRowsOrdered: { id: number; row_label: string }[] = [];
         const taskRowToSectionId = new Map<number, number>();
