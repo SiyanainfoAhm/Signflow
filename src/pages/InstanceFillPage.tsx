@@ -707,19 +707,26 @@ export const InstanceFillPage: React.FC = () => {
                 </ul>
               </Card>
             ) : currentStepData ? (
+              (() => {
+                const filteredSections = currentStepData.sections.filter((section) => {
+                  if (section.pdf_render_mode === 'reasonable_adjustment' && role === 'student') return false;
+                  /* Hide Written Evidence Checklist section when it has no rows - avoids blank header */
+                  if (section.questions.some((q) => q.code === 'written.evidence.checklist')) {
+                    const checklistQ = section.questions.find((q) => q.code === 'written.evidence.checklist' && q.type === 'single_choice');
+                    if (checklistQ && checklistQ.rows.length === 0) return false;
+                  }
+                  const hasInteractive = section.questions.some(
+                    (q) => q.type !== 'instruction_block' && isRoleVisible((q.role_visibility as Record<string, boolean>) || {}, role)
+                  );
+                  return hasInteractive || section.pdf_render_mode === 'assessment_tasks' || section.pdf_render_mode === 'assessment_submission' || section.pdf_render_mode === 'reasonable_adjustment' || section.pdf_render_mode === 'reasonable_adjustment_indicator' || section.pdf_render_mode === 'task_instructions' || section.pdf_render_mode === 'task_questions' || section.pdf_render_mode === 'task_results' || section.pdf_render_mode === 'assessment_summary';
+                });
+                if (filteredSections.length === 0) return null;
+                return (
               <Card>
                 <h2 className="text-xl font-bold text-[var(--text)] mb-4">
                   Step {currentStep}: {currentStepData.title}
                 </h2>
-                {currentStepData.sections
-                  .filter((section) => {
-                    if (section.pdf_render_mode === 'reasonable_adjustment' && role === 'student') return false;
-                    const hasInteractive = section.questions.some(
-                      (q) => q.type !== 'instruction_block' && isRoleVisible((q.role_visibility as Record<string, boolean>) || {}, role)
-                    );
-                    return hasInteractive || section.pdf_render_mode === 'assessment_tasks' || section.pdf_render_mode === 'assessment_submission' || section.pdf_render_mode === 'reasonable_adjustment' || section.pdf_render_mode === 'reasonable_adjustment_indicator' || section.pdf_render_mode === 'task_instructions' || section.pdf_render_mode === 'task_questions' || section.pdf_render_mode === 'task_results' || section.pdf_render_mode === 'assessment_summary';
-                  })
-                  .map((section) => (
+                {filteredSections.map((section) => (
                   <div key={section.id} className="mb-8 last:mb-0">
                     {section.pdf_render_mode !== 'likert_table' && section.pdf_render_mode !== 'reasonable_adjustment' && section.pdf_render_mode !== 'reasonable_adjustment_indicator' && section.pdf_render_mode !== 'task_instructions' && section.pdf_render_mode !== 'task_questions' && section.pdf_render_mode !== 'task_results' && section.pdf_render_mode !== 'assessment_summary' && (
                       <h3 className="text-lg font-semibold text-gray-700 mb-2">{section.title}</h3>
@@ -1221,6 +1228,11 @@ export const InstanceFillPage: React.FC = () => {
                                           const childSatNo = childSat === 'no';
                                           return wrapWithHeader(key, block.headerText, (
                                             <div>
+                                              <div className="mb-3 py-2 px-3 rounded bg-gray-50 border-b border-gray-200 flex items-center justify-end gap-2">
+                                                <span className="text-sm font-semibold text-gray-700">Satisfactory response:</span>
+                                                <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(childQ.id, 'yes')} disabled={!trainerEditable} title="Satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${childSatYes ? 'bg-red-50 border-red-600 text-red-600' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><Check className="w-4 h-4" strokeWidth={2.5} /></button>
+                                                <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(childQ.id, 'no')} disabled={!trainerEditable} title="Not satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${childSatNo ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><X className="w-4 h-4" strokeWidth={2.5} /></button>
+                                              </div>
                                               <QuestionRenderer
                                                 question={childQ}
                                                 value={Object.keys(merged).length ? merged : null}
@@ -1230,11 +1242,6 @@ export const InstanceFillPage: React.FC = () => {
                                                 showRowAssessmentColumn={false}
                                                 studentResubmissionReadOnlyForSatisfactoryRows={isResubmissionAfterTrainer}
                                               />
-                                              <div className="mt-3 flex items-center gap-2">
-                                                <span className="text-sm font-semibold text-gray-700">Satisfactory response:</span>
-                                                <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(childQ.id, 'yes')} disabled={!trainerEditable} title="Satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${childSatYes ? 'bg-red-50 border-red-600 text-red-600' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><Check className="w-4 h-4" strokeWidth={2.5} /></button>
-                                                <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(childQ.id, 'no')} disabled={!trainerEditable} title="Not satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${childSatNo ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><X className="w-4 h-4" strokeWidth={2.5} /></button>
-                                              </div>
                                             </div>
                                           ));
                                         }
@@ -1289,6 +1296,11 @@ export const InstanceFillPage: React.FC = () => {
                                                 const satQNo = satQ === 'no';
                                                 return (
                                                   <div>
+                                                    <div className="mb-3 py-2 px-3 rounded bg-gray-50 border-b border-gray-200 flex items-center justify-end gap-2">
+                                                      <span className="text-sm font-semibold text-gray-700">Satisfactory response:</span>
+                                                      <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(q.id, 'yes')} disabled={!trainerEditable} title="Satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${satQYes ? 'bg-red-50 border-red-600 text-red-600' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><Check className="w-4 h-4" strokeWidth={2.5} /></button>
+                                                      <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(q.id, 'no')} disabled={!trainerEditable} title="Not satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${satQNo ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><X className="w-4 h-4" strokeWidth={2.5} /></button>
+                                                    </div>
                                                     <QuestionRenderer
                                                       question={q}
                                                       value={Object.keys(merged).length ? merged : null}
@@ -1298,22 +1310,17 @@ export const InstanceFillPage: React.FC = () => {
                                                       showRowAssessmentColumn={false}
                                                       studentResubmissionReadOnlyForSatisfactoryRows={isResubmissionAfterTrainer}
                                                     />
-                                                    <div className="mt-3 flex items-center gap-2">
-                                                      <span className="text-sm font-semibold text-gray-700">Satisfactory response:</span>
-                                                      <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(q.id, 'yes')} disabled={!trainerEditable} title="Satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${satQYes ? 'bg-red-50 border-red-600 text-red-600' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><Check className="w-4 h-4" strokeWidth={2.5} /></button>
-                                                      <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(q.id, 'no')} disabled={!trainerEditable} title="Not satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${satQNo ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><X className="w-4 h-4" strokeWidth={2.5} /></button>
-                                                    </div>
                                                   </div>
                                                 );
                                               })()
                                             ) : (
                                               <div>
-                                                <QuestionRenderer question={q} value={(answers[getAnswerKey(q.id, null)] as string | number | boolean | Record<string, unknown> | string[] | undefined) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string | number | boolean | Record<string, unknown> | string[])} disabled={!editable} error={errors[`q-${q.id}`]} />
-                                                <div className="mt-3 flex items-center gap-2">
+                                                <div className="mb-3 py-2 px-3 rounded bg-gray-50 border-b border-gray-200 flex items-center justify-end gap-2">
                                                   <span className="text-sm font-semibold text-gray-700">Satisfactory response:</span>
                                                   <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(q.id, 'yes')} disabled={!trainerEditable} title="Satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${trainerAssessments[q.id] === 'yes' ? 'bg-red-50 border-red-600 text-red-600' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><Check className="w-4 h-4" strokeWidth={2.5} /></button>
                                                   <button type="button" onClick={() => trainerEditable && handleTrainerAssessmentChange(q.id, 'no')} disabled={!trainerEditable} title="Not satisfactory" className={`p-1.5 rounded border flex items-center justify-center ${trainerAssessments[q.id] === 'no' ? 'bg-red-100 border-red-600 text-red-700' : 'border-gray-300 text-gray-500 hover:border-gray-500 hover:text-gray-700'}`}><X className="w-4 h-4" strokeWidth={2.5} /></button>
                                                 </div>
+                                                <QuestionRenderer question={q} value={(answers[getAnswerKey(q.id, null)] as string | number | boolean | Record<string, unknown> | string[] | undefined) ?? null} onChange={(v) => handleAnswerChange(q.id, null, v as string | number | boolean | Record<string, unknown> | string[])} disabled={!editable} error={errors[`q-${q.id}`]} />
                                               </div>
                                             )}
                                             {contentBlocks.map((block, bi) => renderBlock(block, String(block.questionId ?? `block-${bi}`)))}
@@ -2256,6 +2263,8 @@ export const InstanceFillPage: React.FC = () => {
                   </div>
                 ))}
               </Card>
+            );
+          })()
             ) : null}
 
             <div className="flex gap-3">

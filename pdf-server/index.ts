@@ -646,6 +646,8 @@ function buildHtml(data: {
     .grid-status-cb.checked { background: #000 !important; color: #fff !important; }
     .task-q-satisfactory-top-right { position: absolute; top: 4px; right: 8px; font-size: 15pt; font-weight: 600; white-space: nowrap; }
     .task-q-satisfactory-top-right .grid-status-cb { width: 16px !important; height: 16px !important; min-width: 16px !important; min-height: 16px !important; font-size: 11px !important; }
+    .task-q-satisfactory-above { display: block; padding: 8px 12px; margin: 0 0 10px 0; text-align: right; font-size: 10pt; font-weight: 600; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+    .task-q-satisfactory-above .grid-status-cb { width: 14px !important; height: 14px !important; min-width: 14px !important; min-height: 14px !important; font-size: 10px !important; }
     .task-q-answer-block { padding: 12px; min-height: 36px; font-size: 11pt; background: #fff; box-sizing: border-box; overflow-wrap: anywhere; word-break: break-word; white-space: pre-line; }
     .task-q-answer-block.task-q-answer-large { min-height: 96px; }
     .task-questions-table .task-q-inner-table th, .task-questions-table .task-q-inner-table td,
@@ -936,6 +938,11 @@ function buildHtml(data: {
       const learnerEvalLikertSections = isLearnerEvaluation ? sections.filter(s => s.section.pdf_render_mode === 'likert_table').sort((a, b) => b.section.sort_order - a.section.sort_order) : [];
       const lastLikertSectionId = learnerEvalLikertSections.length > 0 ? learnerEvalLikertSections[0].section.id : null;
       for (const { section, questions } of sections) {
+      /* Skip Written Evidence Checklist section entirely when it has no rows - avoids blank header */
+      if (questions.some((q) => q.question.code === 'written.evidence.checklist')) {
+        const checklistQ = questions.find((q) => q.question.code === 'written.evidence.checklist' && q.question.type === 'single_choice' && q.rows.length > 0);
+        if (!checklistQ) continue;
+      }
       if (isLearnerEvaluation && !learnerEvalIntroShown) {
         html += '<div class="appendix-b-page">';
         html += '<div class="appendix-b-content-wrapper">';
@@ -1276,10 +1283,9 @@ function buildHtml(data: {
           const satNo = sat === 'no';
           const isGridTable = question.type === 'grid_table' && rows.length > 0;
           const boxClass = 'task-q-question-box' + (nextIsPageBreak ? ' page-break-after' : '');
-          const boxStyle = useTopRightSatisfactory ? 'position:relative;' : '';
-          html += `<div class="${boxClass}"${boxStyle ? ` style="${boxStyle}"` : ''}>`;
+          html += `<div class="${boxClass}">`;
           if (useTopRightSatisfactory) {
-            html += `<div class="task-q-satisfactory-top-right"><span style="font-weight:600;margin-right:8px">Satisfactory response:</span><span class="grid-status-cb${satYes ? ' checked' : ''}">${SVG_CHECK}</span> Yes <span style="margin-left:12px" class="grid-status-cb${satNo ? ' checked' : ''}">${SVG_X}</span> No</div>`;
+            html += `<div class="task-q-satisfactory-above"><span style="font-weight:600;margin-right:8px">Satisfactory response:</span><span class="grid-status-cb${satYes ? ' checked' : ''}">${SVG_CHECK}</span> Yes <span style="margin-left:12px" class="grid-status-cb${satNo ? ' checked' : ''}">${SVG_X}</span> No</div>`;
           }
           if (isAssessment2Plus) {
             html += `<div class="task-q-question-label" style="font-weight:bold;margin-bottom:8px">${question.label}</div>`;
@@ -1415,7 +1421,7 @@ function buildHtml(data: {
                   const cColumnWordLimits = (Array.isArray(cqPm.columnWordLimits) ? cqPm.columnWordLimits : []).map((v: unknown) => (typeof v === 'number' && v > 0 ? v : null)) as (number | null)[];
                   html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}`;
                   html += useTopRightSatisfactory
-                    ? `<div class="task-q-additional-grid" style="position:relative;"><div class="task-q-satisfactory-top-right"><span style="font-weight:600;margin-right:8px">Satisfactory response:</span><span class="grid-status-cb${cqSatYes ? ' checked' : ''}">${SVG_CHECK}</span> Yes <span style="margin-left:12px" class="grid-status-cb${cqSatNo ? ' checked' : ''}">${SVG_X}</span> No</div><table class="section-table grid-table-no-border task-q-inner-table">`
+                    ? `<div class="task-q-additional-grid"><div class="task-q-satisfactory-above"><span style="font-weight:600;margin-right:8px">Satisfactory response:</span><span class="grid-status-cb${cqSatYes ? ' checked' : ''}">${SVG_CHECK}</span> Yes <span style="margin-left:12px" class="grid-status-cb${cqSatNo ? ' checked' : ''}">${SVG_X}</span> No</div><table class="section-table grid-table-no-border task-q-inner-table">`
                     : '<div class="task-q-additional-grid"><table class="section-table grid-table-no-border task-q-inner-table">';
                   if (cLayout !== 'no_image_no_header') {
                     html += '<thead><tr>';
