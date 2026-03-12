@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Mail, Phone, Pencil } from 'lucide-react';
-import { listTrainersPaged, createTrainer, updateTrainer, listBatches } from '../lib/formEngine';
+import { listTrainersPaged, createTrainer, updateTrainer, listBatchesPaged } from '../lib/formEngine';
 import type { Trainer } from '../lib/formEngine';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -38,7 +38,7 @@ export const AdminTrainersPage: React.FC = () => {
   const [batches, setBatches] = useState<{ id: number; name: string; trainer_id: number }[]>([]);
 
   useEffect(() => {
-    listBatches().then((b) => setBatches(b));
+    listBatchesPaged(1, 500).then((res) => setBatches(res.data));
   }, []);
 
   const digitsOnly = (val: string) => val.replace(/\D/g, '');

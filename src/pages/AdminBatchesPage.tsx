@@ -1,19 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Pencil, Users } from 'lucide-react';
-import { listBatches, createBatch, updateBatch, updateBatchStudentAssignments, listUsersForBatchAssignment, listStudents } from '../lib/formEngine';
-import type { Batch, UserRow, Student } from '../lib/formEngine';
+import { listBatchesPaged, createBatch, updateBatch, updateBatchStudentAssignments, listUsersForBatchAssignmentPaged, listStudentsPaged, listStudentsInBatch } from '../lib/formEngine';
+import type { Batch } from '../lib/formEngine';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
-import { MultiSelect } from '../components/ui/MultiSelect';
+import { SelectAsync } from '../components/ui/SelectAsync';
+import { MultiSelectAsync } from '../components/ui/MultiSelectAsync';
 import { Modal } from '../components/ui/Modal';
 import { Loader } from '../components/ui/Loader';
 import { toast } from '../utils/toast';
 
+const BATCH_PAGE_SIZE = 20;
+
 export const AdminBatchesPage: React.FC = () => {
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [trainers, setTrainers] = useState<UserRow[]>([]);
+  const [totalBatches, setTotalBatches] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -21,29 +24,39 @@ export const AdminBatchesPage: React.FC = () => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [draft, setDraft] = useState({ name: '', trainer_id: '' });
   const [editDraft, setEditDraft] = useState<{ name: string; trainer_id: string; student_ids: number[] } | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
 
-  const loadBatches = async () => {
-    const data = await listBatches();
-    setBatches(data);
-  };
-
-  const loadTrainers = async () => {
-    const data = await listUsersForBatchAssignment();
-    setTrainers(data);
-  };
-
-  const loadStudents = async () => {
-    const data = await listStudents();
-    setStudents(data);
-  };
-
-  useEffect(() => {
+  const loadBatches = useCallback(async (page: number) => {
     setLoading(true);
-    Promise.all([loadBatches(), loadTrainers(), loadStudents()]).finally(() => setLoading(false));
+    const res = await listBatchesPaged(page, BATCH_PAGE_SIZE);
+    setBatches(res.data);
+    setTotalBatches(res.total);
+    setLoading(false);
   }, []);
 
-  const trainerOptions = trainers.map((t) => ({ value: String(t.id), label: `${t.full_name} (${t.email})` }));
+  useEffect(() => {
+    loadBatches(currentPage);
+  }, [currentPage, loadBatches]);
+
+  const loadTrainersOptions = useCallback(async (page: number, search: string) => {
+    const res = await listUsersForBatchAssignmentPaged(page, 20, search || undefined);
+    return {
+      options: res.data.map((t) => ({ value: String(t.id), label: `${t.full_name} (${t.email})` })),
+      hasMore: page * 20 < res.total,
+    };
+  }, []);
+
+  const loadStudentsOptions = useCallback(async (page: number, search: string) => {
+    const res = await listStudentsPaged(page, 20, search || undefined);
+    return {
+      options: res.data.map((s) => ({
+        value: s.id,
+        label: `${[s.first_name, s.last_name].filter(Boolean).join(' ') || s.email} (${s.student_id ?? s.email})`,
+      })),
+      hasMore: page * 20 < res.total,
+    };
+  }, []);
+
+  const totalPages = Math.max(1, Math.ceil(totalBatches / BATCH_PAGE_SIZE));
 
   const handleCreate = async () => {
     if (!draft.name.trim()) {
@@ -59,7 +72,7 @@ export const AdminBatchesPage: React.FC = () => {
     const created = await createBatch({ name: draft.name.trim(), trainer_id: trainerId });
     setCreating(false);
     if (created) {
-      await loadBatches();
+      await loadBatches(currentPage);
       setDraft({ name: '', trainer_id: '' });
       setIsCreateOpen(false);
       toast.success('Batch added');
@@ -74,13 +87,12 @@ export const AdminBatchesPage: React.FC = () => {
       setEditDraft(null);
       return;
     }
-    const studentIds = students.filter((s) => s.batch_id === editingBatch.id).map((s) => s.id);
-    setEditDraft({
-      name: editingBatch.name,
-      trainer_id: String(editingBatch.trainer_id),
-      student_ids: studentIds,
+    setEditDraft({ name: editingBatch.name, trainer_id: String(editingBatch.trainer_id), student_ids: [] });
+    listStudentsInBatch(editingBatch.id).then((students) => {
+      const studentIds = students.map((s) => s.id);
+      setEditDraft((p) => (p ? { ...p, student_ids: studentIds } : null));
     });
-  }, [editingBatch, students]);
+  }, [editingId, editingBatch?.id, editingBatch?.name, editingBatch?.trainer_id]);
 
   const handleSaveEdit = async () => {
     if (!editingId || !editDraft) return;
@@ -101,8 +113,7 @@ export const AdminBatchesPage: React.FC = () => {
     const assignmentsOk = await updateBatchStudentAssignments(editingId, editDraft.student_ids);
     setSavingEdit(false);
     if (batchUpdated && assignmentsOk) {
-      await loadBatches();
-      await loadStudents();
+      await loadBatches(currentPage);
       setEditingId(null);
       toast.success('Batch updated');
     } else {
@@ -126,13 +137,35 @@ export const AdminBatchesPage: React.FC = () => {
               Add Batch
             </Button>
           </div>
-          {trainers.length === 0 && !loading && (
-            <p className="text-amber-600 text-sm mt-2">Add at least one trainer (Trainers page) before creating batches.</p>
-          )}
         </Card>
 
         <Card>
-          <h2 className="text-lg font-bold text-[var(--text)] mb-4">Batch Directory</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h2 className="text-lg font-bold text-[var(--text)]">Batch Directory</h2>
+            {!loading && totalBatches > BATCH_PAGE_SIZE && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">
+                  Page {currentPage} of {totalPages} ({totalBatches} total)
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
           {loading ? (
             <div className="py-12">
               <Loader variant="dots" size="lg" message="Loading batches..." />
@@ -199,12 +232,12 @@ export const AdminBatchesPage: React.FC = () => {
           </label>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Trainer *</span>
-            <Select
+            <SelectAsync
               value={draft.trainer_id}
               onChange={(v) => setDraft((p) => ({ ...p, trainer_id: v }))}
-              options={[{ value: '', label: 'Select trainer' }, ...trainerOptions]}
+              loadOptions={loadTrainersOptions}
+              placeholder="Select trainer"
               className="mt-1"
-              portal
             />
           </label>
         </div>
@@ -215,7 +248,7 @@ export const AdminBatchesPage: React.FC = () => {
           <Button
             variant="primary"
             onClick={handleCreate}
-            disabled={creating || !draft.name.trim() || !draft.trainer_id || trainers.length === 0}
+            disabled={creating || !draft.name.trim() || !draft.trainer_id}
           >
             {creating ? 'Adding...' : 'Add Batch'}
           </Button>
@@ -241,25 +274,25 @@ export const AdminBatchesPage: React.FC = () => {
             </label>
             <label className="block">
               <span className="text-sm font-medium text-gray-700">Trainer *</span>
-              <Select
+              <SelectAsync
                 value={editDraft.trainer_id}
                 onChange={(v) => setEditDraft((p) => (p ? { ...p, trainer_id: v } : null))}
-                options={[{ value: '', label: 'Select trainer' }, ...trainerOptions]}
+                loadOptions={loadTrainersOptions}
+                placeholder="Select trainer"
+                selectedLabel={editingBatch ? `${editingBatch.trainer_name ?? ''}` : undefined}
                 className="mt-1"
-                portal
               />
             </label>
             <div className="mt-4">
-              <MultiSelect
+              <MultiSelectAsync
                 label="Students"
                 value={editDraft.student_ids}
                 onChange={(ids) => setEditDraft((p) => (p ? { ...p, student_ids: ids } : null))}
-                options={students.map((s) => ({
-                  value: s.id,
-                  label: `${[s.first_name, s.last_name].filter(Boolean).join(' ') || s.email} (${s.student_id ?? s.email})`,
-                }))}
+                loadOptions={loadStudentsOptions}
                 placeholder="Select students for this batch"
                 maxHeight={220}
+                countLabel="students"
+                searchPlaceholder="Search students..."
               />
             </div>
           </div>

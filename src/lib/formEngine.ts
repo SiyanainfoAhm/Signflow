@@ -1255,6 +1255,36 @@ export async function listUsersForBatchAssignment(): Promise<UserRow[]> {
   return ((data as Record<string, unknown>[]) || []).map(mapUserRow);
 }
 
+export async function listUsersForBatchAssignmentPaged(
+  page = 1,
+  pageSize = 20,
+  search?: string
+): Promise<PaginatedResult<UserRow>> {
+  const from = Math.max(0, (page - 1) * pageSize);
+  const to = from + pageSize - 1;
+  let query = supabase
+    .from('skyline_users')
+    .select('*', { count: 'exact' })
+    .in('role', ['trainer', 'admin'])
+    .eq('status', 'active')
+    .order('full_name');
+  if (search && search.trim()) {
+    query = query.or(`full_name.ilike.%${search.trim()}%,email.ilike.%${search.trim()}%`);
+  }
+  const { data, error, count } = await query.range(from, to);
+  if (error) {
+    console.error('listUsersForBatchAssignmentPaged error', error);
+    return { data: [], total: 0, page, pageSize };
+  }
+  const mapped = ((data as Record<string, unknown>[]) || []).map(mapUserRow);
+  return {
+    data: mapped,
+    total: Number(count ?? 0),
+    page,
+    pageSize,
+  };
+}
+
 export async function createTrainer(input: CreateTrainerInput): Promise<Trainer | null> {
   const { data, error } = await supabase
     .from('skyline_users')
@@ -1942,6 +1972,47 @@ export async function listBatches(): Promise<Batch[]> {
   return rows.map((r) => mapBatchRow(r, trainerMap.get(Number(r.trainer_id)) ?? null));
 }
 
+export async function listBatchesPaged(
+  page = 1,
+  pageSize = 20,
+  search?: string
+): Promise<PaginatedResult<Batch>> {
+  const from = Math.max(0, (page - 1) * pageSize);
+  const to = from + pageSize - 1;
+  let query = supabase
+    .from('skyline_batches')
+    .select('id, name, trainer_id, created_at', { count: 'exact' })
+    .order('name', { ascending: true });
+  if (search && search.trim()) {
+    query = query.ilike('name', `%${search.trim()}%`);
+  }
+  const { data, error, count } = await query.range(from, to);
+  if (error) {
+    console.error('listBatchesPaged error', error);
+    return { data: [], total: 0, page, pageSize };
+  }
+  const rows = (data as Record<string, unknown>[]) || [];
+  if (rows.length === 0) return { data: [], total: Number(count ?? 0), page, pageSize };
+  const trainerIds = [...new Set(rows.map((r) => Number(r.trainer_id)).filter(Boolean))];
+  const trainerMap = new Map<number, string>();
+  if (trainerIds.length > 0) {
+    const { data: trainers } = await supabase
+      .from('skyline_users')
+      .select('id, full_name')
+      .in('id', trainerIds);
+    for (const t of (trainers as { id: number; full_name: string }[]) || []) {
+      trainerMap.set(t.id, t.full_name ?? '');
+    }
+  }
+  const mapped = rows.map((r) => mapBatchRow(r, trainerMap.get(Number(r.trainer_id)) ?? null));
+  return {
+    data: mapped,
+    total: Number(count ?? 0),
+    page,
+    pageSize,
+  };
+}
+
 function mapBatchRow(row: Record<string, unknown>, trainerName: string | null): Batch {
   return {
     id: Number(row.id),
@@ -2611,7 +2682,8 @@ export async function listFormsPaged(
   page = 1,
   pageSize = 20,
   status?: string,
-  courseId?: number
+  courseId?: number,
+  search?: string
 ): Promise<PaginatedResult<Form>> {
   const from = Math.max(0, (page - 1) * pageSize);
   const to = from + pageSize - 1;
@@ -2620,6 +2692,9 @@ export async function listFormsPaged(
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false });
   if (status) query = query.eq('status', status);
+  if (search && search.trim()) {
+    query = query.ilike('name', `%${search.trim()}%`);
+  }
   if (courseId && Number.isFinite(courseId)) {
     const { data: links } = await supabase
       .from('skyline_course_forms')
@@ -2662,6 +2737,34 @@ export async function listCourses(): Promise<Course[]> {
     return [];
   }
   return (data as Course[]) || [];
+}
+
+export async function listCoursesPaged(
+  page = 1,
+  pageSize = 20,
+  search?: string
+): Promise<PaginatedResult<Course>> {
+  const from = Math.max(0, (page - 1) * pageSize);
+  const to = from + pageSize - 1;
+  let query = supabase
+    .from('skyline_courses')
+    .select('*', { count: 'exact' })
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+  if (search && search.trim()) {
+    query = query.ilike('name', `%${search.trim()}%`);
+  }
+  const { data, error, count } = await query.range(from, to);
+  if (error) {
+    console.error('listCoursesPaged error', error);
+    return { data: [], total: 0, page, pageSize };
+  }
+  return {
+    data: (data as Course[]) || [],
+    total: Number(count ?? 0),
+    page,
+    pageSize,
+  };
 }
 
 export async function createCourse(name: string): Promise<Course | null> {

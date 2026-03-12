@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Mail, Phone, Pencil, Shield, UserRound, Building2 } from 'lucide-react';
-import { listUsersPaged, createUser, updateUser, adminSetPassword, listBatches } from '../lib/formEngine';
+import { listUsersPaged, createUser, updateUser, adminSetPassword, listBatchesPaged } from '../lib/formEngine';
 import type { UserRow } from '../lib/formEngine';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -67,7 +67,7 @@ export const AdminUsersPage: React.FC = () => {
   const [batches, setBatches] = useState<{ id: number; name: string; trainer_id: number }[]>([]);
 
   useEffect(() => {
-    listBatches().then((b) => setBatches(b));
+    listBatchesPaged(1, 500).then((res) => setBatches(res.data));
   }, []);
 
   const digitsOnly = (val: string) => val.replace(/\D/g, '');

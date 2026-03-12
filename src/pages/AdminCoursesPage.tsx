@@ -1,27 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Pencil, FileText, Trash2 } from 'lucide-react';
 import {
-  listCourses,
+  listCoursesPaged,
   createCourse,
   updateCourse,
   deleteCourse,
   setCourseForms,
   getFormsForCourse,
-  listForms,
+  listFormsPaged,
 } from '../lib/formEngine';
 import type { Course } from '../lib/formEngine';
-import type { Form } from '../types/database';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { MultiSelect } from '../components/ui/MultiSelect';
+import { MultiSelectAsync } from '../components/ui/MultiSelectAsync';
 import { Modal } from '../components/ui/Modal';
 import { Loader } from '../components/ui/Loader';
 import { toast } from '../utils/toast';
 
+const COURSE_PAGE_SIZE = 20;
+
 export const AdminCoursesPage: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
-  const [forms, setForms] = useState<Form[]>([]);
+  const [totalCourses, setTotalCourses] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -31,25 +33,30 @@ export const AdminCoursesPage: React.FC = () => {
   const [draft, setDraft] = useState({ name: '' });
   const [editDraft, setEditDraft] = useState<{ name: string; form_ids: number[] } | null>(null);
 
-  const loadCourses = async () => {
-    const data = await listCourses();
-    setCourses(data);
-  };
-
-  const loadForms = async () => {
-    const data = await listForms();
-    setForms(data);
-  };
-
-  useEffect(() => {
+  const loadCourses = useCallback(async (page: number) => {
     setLoading(true);
-    Promise.all([loadCourses(), loadForms()]).finally(() => setLoading(false));
+    const res = await listCoursesPaged(page, COURSE_PAGE_SIZE);
+    setCourses(res.data);
+    setTotalCourses(res.total);
+    setLoading(false);
   }, []);
 
-  const formOptions = forms.map((f) => ({
-    value: f.id,
-    label: `${f.name} (v${f.version ?? '1.0.0'})`,
-  }));
+  useEffect(() => {
+    loadCourses(currentPage);
+  }, [currentPage, loadCourses]);
+
+  const loadFormsOptions = useCallback(async (page: number, search: string) => {
+    const res = await listFormsPaged(page, 20, undefined, undefined, search || undefined);
+    return {
+      options: res.data.map((f) => ({
+        value: f.id,
+        label: `${f.name} (v${f.version ?? '1.0.0'})`,
+      })),
+      hasMore: page * 20 < res.total,
+    };
+  }, []);
+
+  const totalPages = Math.max(1, Math.ceil(totalCourses / COURSE_PAGE_SIZE));
 
   const handleCreate = async () => {
     if (!draft.name.trim()) {
@@ -60,7 +67,7 @@ export const AdminCoursesPage: React.FC = () => {
     const created = await createCourse(draft.name.trim());
     setCreating(false);
     if (created) {
-      await loadCourses();
+      await loadCourses(currentPage);
       setDraft({ name: '' });
       setIsCreateOpen(false);
       toast.success('Course added');
@@ -94,7 +101,7 @@ export const AdminCoursesPage: React.FC = () => {
     const formsOk = await setCourseForms(editingId, editDraft.form_ids);
     setSavingEdit(false);
     if (updated && formsOk) {
-      await loadCourses();
+      await loadCourses(currentPage);
       setEditingId(null);
       toast.success('Course updated');
     } else {
@@ -108,7 +115,7 @@ export const AdminCoursesPage: React.FC = () => {
     const ok = await deleteCourse(id);
     setDeletingId(null);
     if (ok) {
-      await loadCourses();
+      await loadCourses(currentPage);
       if (editingId === id) setEditingId(null);
       toast.success('Course deleted');
     } else {
@@ -143,7 +150,32 @@ export const AdminCoursesPage: React.FC = () => {
         </Card>
 
         <Card>
-          <h2 className="text-lg font-bold text-[var(--text)] mb-4">Course Directory</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h2 className="text-lg font-bold text-[var(--text)]">Course Directory</h2>
+            {!loading && totalCourses > COURSE_PAGE_SIZE && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">
+                  Page {currentPage} of {totalPages} ({totalCourses} total)
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
           {loading ? (
             <div className="py-12">
               <Loader variant="dots" size="lg" message="Loading courses..." />
@@ -253,14 +285,15 @@ export const AdminCoursesPage: React.FC = () => {
               />
             </label>
             <div className="mt-4">
-              <MultiSelect
+              <MultiSelectAsync
                 label="Forms in this course"
                 value={editDraft.form_ids}
                 onChange={(ids) => setEditDraft((p) => (p ? { ...p, form_ids: ids } : null))}
-                options={formOptions}
+                loadOptions={loadFormsOptions}
                 placeholder="Select forms for this course"
                 maxHeight={220}
                 countLabel="forms"
+                searchPlaceholder="Search forms..."
               />
             </div>
           </div>

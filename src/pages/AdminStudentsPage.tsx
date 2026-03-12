@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Plus, Send, Mail, Phone, Pencil, Key, Link } from 'lucide-react';
-import { listStudentsPaged, createStudent, updateStudent, createFormInstance, getInstanceForStudentAndForm, listForms, listBatches, listStudentsInBatch, setStudentPassword, listCourses, getFormsForCourse } from '../lib/formEngine';
+import { listStudentsPaged, createStudent, updateStudent, createFormInstance, getInstanceForStudentAndForm, listForms, listBatchesPaged, listStudentsInBatch, setStudentPassword, listCoursesPaged, getFormsForCourse, listFormsPaged } from '../lib/formEngine';
 import type { Student } from '../lib/formEngine';
 import type { Form } from '../types/database';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
+import { SelectAsync } from '../components/ui/SelectAsync';
 import { Modal } from '../components/ui/Modal';
 import { Loader } from '../components/ui/Loader';
 import { toast } from '../utils/toast';
@@ -30,8 +30,7 @@ export const AdminStudentsPage: React.FC = () => {
   const [sendToBatchBatchId, setSendToBatchBatchId] = useState('');
   const [courseFilter, setCourseFilter] = useState('');
   const [filteredForms, setFilteredForms] = useState<Form[]>([]);
-  const [batches, setBatches] = useState<{ id: number; name: string }[]>([]);
-  const [courses, setCourses] = useState<{ id: number; name: string }[]>([]);
+  const [hasBatches, setHasBatches] = useState(false);
   const [setPasswordStudentId, setSetPasswordStudentId] = useState<number | null>(null);
   const [passwordDraft, setPasswordDraft] = useState('');
   const [settingPassword, setSettingPassword] = useState(false);
@@ -80,10 +79,7 @@ export const AdminStudentsPage: React.FC = () => {
     listForms('published').then((f) => setForms(f));
   }, []);
   useEffect(() => {
-    listBatches().then((b) => setBatches(b));
-  }, []);
-  useEffect(() => {
-    listCourses().then((c) => setCourses(c));
+    listBatchesPaged(1, 1).then((res) => setHasBatches(res.total > 0));
   }, []);
 
   useEffect(() => {
@@ -97,6 +93,45 @@ export const AdminStudentsPage: React.FC = () => {
   }, [courseFilter]);
 
   const displayForms = courseFilter ? filteredForms : forms;
+
+  const loadBatchesOptions = useCallback(async (page: number, search: string) => {
+    const res = await listBatchesPaged(page, 20, search || undefined);
+    return {
+      options: res.data.map((b) => ({ value: String(b.id), label: b.name })),
+      hasMore: page * 20 < res.total,
+    };
+  }, []);
+
+  const loadCoursesOptions = useCallback(async (page: number, search: string) => {
+    const res = await listCoursesPaged(page, 20, search || undefined);
+    const opts = res.data.map((c) => ({ value: String(c.id), label: c.name }));
+    const withAll = page === 1 && !search?.trim() ? [{ value: '', label: 'All courses' }, ...opts] : opts;
+    return { options: withAll, hasMore: page * 20 < res.total };
+  }, []);
+
+  const loadFormsOptions = useCallback(
+    async (page: number, search: string) => {
+      if (courseFilter) {
+        const cid = Number(courseFilter);
+        if (!Number.isFinite(cid)) return { options: [], hasMore: false };
+        const formsForCourse = await getFormsForCourse(cid);
+        const published = formsForCourse.filter((f) => f.status === 'published');
+        const filtered = search?.trim()
+          ? published.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()))
+          : published;
+        return {
+          options: filtered.map((f) => ({ value: String(f.id), label: `${f.name} (${f.version ?? '1.0.0'})` })),
+          hasMore: false,
+        };
+      }
+      const res = await listFormsPaged(page, 20, 'published', undefined, search || undefined);
+      return {
+        options: res.data.map((f) => ({ value: String(f.id), label: `${f.name} (${f.version ?? '1.0.0'})` })),
+        hasMore: page * 20 < res.total,
+      };
+    },
+    [courseFilter]
+  );
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -121,7 +156,6 @@ export const AdminStudentsPage: React.FC = () => {
     });
   }, [displayForms, students]);
 
-  const formOptions = displayForms.map((f) => ({ value: String(f.id), label: `${f.name} (${f.version ?? '1.0.0'})` }));
   const defaultEmail = useMemo(() => {
     const id = studentDraft.student_id.trim();
     return id ? buildStudentEmail(id) : '';
@@ -340,7 +374,7 @@ export const AdminStudentsPage: React.FC = () => {
               <h2 className="text-lg font-bold text-[var(--text)]">Students</h2>
               <div className="text-sm text-gray-600 mt-1">
               <p>Manage learner profiles and send form links. Students must be in a batch.</p>
-              {batches.length === 0 && <p className="text-amber-600 mt-1">Create batches first (Batches page).</p>}
+              {!hasBatches && <p className="text-amber-600 mt-1">Create batches first (Batches page).</p>}
             </div>
             </div>
             <div className="flex items-center gap-2">
@@ -353,7 +387,7 @@ export const AdminStudentsPage: React.FC = () => {
                 placeholder="Search by name, email, phone, city..."
                 className="w-full md:w-72"
               />
-              <Button onClick={() => setIsCreateOpen(true)} className="min-w-[160px]" disabled={batches.length === 0}>
+              <Button onClick={() => setIsCreateOpen(true)} className="min-w-[160px]" disabled={!hasBatches}>
                 <Plus className="w-4 h-4 mr-2 inline" />
                 Add Student
               </Button>
@@ -369,40 +403,41 @@ export const AdminStudentsPage: React.FC = () => {
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[200px]">
               <label className="block text-xs font-medium text-gray-600 mb-1">Course</label>
-              <Select
+              <SelectAsync
                 value={courseFilter}
                 onChange={(v) => {
                   setCourseFilter(v);
                   setSendToBatchFormId('');
                 }}
-                options={[{ value: '', label: 'All courses' }, ...courses.map((c) => ({ value: String(c.id), label: c.name }))]}
+                loadOptions={loadCoursesOptions}
+                placeholder="All courses"
+                selectedLabel={!courseFilter ? 'All courses' : undefined}
                 className="w-full"
-                portal
               />
             </div>
             <div className="min-w-[200px]">
               <label className="block text-xs font-medium text-gray-600 mb-1">Form</label>
-              <Select
+              <SelectAsync
                 value={sendToBatchFormId}
                 onChange={(v) => setSendToBatchFormId(v)}
-                options={[{ value: '', label: 'Select form' }, ...formOptions]}
+                loadOptions={loadFormsOptions}
+                placeholder="Select form"
                 className="w-full"
-                portal
               />
             </div>
             <div className="min-w-[200px]">
               <label className="block text-xs font-medium text-gray-600 mb-1">Batch</label>
-              <Select
+              <SelectAsync
                 value={sendToBatchBatchId}
                 onChange={(v) => setSendToBatchBatchId(v)}
-                options={[{ value: '', label: 'Select batch' }, ...batches.map((b) => ({ value: String(b.id), label: b.name }))]}
+                loadOptions={loadBatchesOptions}
+                placeholder="Select batch"
                 className="w-full"
-                portal
               />
             </div>
             <Button
               onClick={handleSendToBatch}
-              disabled={sendingBatch || !sendToBatchFormId || !sendToBatchBatchId || displayForms.length === 0 || batches.length === 0}
+              disabled={sendingBatch || !sendToBatchFormId || !sendToBatchBatchId || displayForms.length === 0}
             >
               {sendingBatch ? (
                 <>
@@ -483,12 +518,19 @@ export const AdminStudentsPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-4 py-3 border-b border-[var(--border)] w-[320px]">
-                        <Select
+                        <SelectAsync
                           value={rowFormMap[student.id] || (displayForms[0] ? String(displayForms[0].id) : '')}
                           onChange={(v) => setRowFormMap((prev) => ({ ...prev, [student.id]: v }))}
-                          options={formOptions}
+                          loadOptions={loadFormsOptions}
+                          placeholder="Select form"
+                          selectedLabel={
+                            (() => {
+                              const fid = rowFormMap[student.id] || (displayForms[0] ? String(displayForms[0].id) : '');
+                              const f = displayForms.find((x) => String(x.id) === fid);
+                              return f ? `${f.name} (${f.version ?? '1.0.0'})` : undefined;
+                            })()
+                          }
                           className="max-w-[320px]"
-                          portal
                         />
                       </td>
                       <td className="px-4 py-3 border-b border-[var(--border)] text-right">
@@ -600,15 +642,12 @@ export const AdminStudentsPage: React.FC = () => {
             />
             <div className="md:col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1">Batch *</label>
-              <Select
+              <SelectAsync
                 value={studentDraft.batch_id}
                 onChange={(v) => setStudentDraft((p) => ({ ...p, batch_id: v }))}
-                options={[
-                  { value: '', label: 'Select batch' },
-                  ...batches.map((b) => ({ value: String(b.id), label: b.name })),
-                ]}
+                loadOptions={loadBatchesOptions}
+                placeholder="Select batch"
                 className="w-full"
-                portal
               />
             </div>
           </div>
@@ -671,15 +710,13 @@ export const AdminStudentsPage: React.FC = () => {
               />
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Batch *</label>
-                <Select
+                <SelectAsync
                   value={editForm.batch_id}
                   onChange={(v) => setEditForm((p) => (p ? { ...p, batch_id: v } : p))}
-                  options={[
-                    { value: '', label: 'Select batch' },
-                    ...batches.map((b) => ({ value: String(b.id), label: b.name })),
-                  ]}
+                  loadOptions={loadBatchesOptions}
+                  placeholder="Select batch"
+                  selectedLabel={editingStudent?.batch_name ?? undefined}
                   className="w-full"
-                  portal
                 />
               </div>
             </div>

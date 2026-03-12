@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, FileText, Edit, Eye, MoreVertical, Copy } from 'lucide-react';
-import { listFormsPaged, createForm, duplicateForm, getDefaultFormDates, listCourses, getCoursesForForms } from '../lib/formEngine';
+import { listFormsPaged, createForm, duplicateForm, getDefaultFormDates, listCoursesPaged, getCoursesForForms } from '../lib/formEngine';
 import type { Form } from '../types/database';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
+import { SelectAsync } from '../components/ui/SelectAsync';
 import { DatePicker } from '../components/ui/DatePicker';
 import { Loader } from '../components/ui/Loader';
 
@@ -29,7 +29,6 @@ export const AdminFormsListPage: React.FC = () => {
   const [previewing, setPreviewing] = useState<number | null>(null);
   const [duplicating, setDuplicating] = useState<number | null>(null);
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
-  const [courses, setCourses] = useState<{ id: number; name: string }[]>([]);
   const [courseFilter, setCourseFilter] = useState<string>('');
   const [formCoursesMap, setFormCoursesMap] = useState<Map<number, { id: number; name: string }[]>>(new Map());
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -39,11 +38,16 @@ export const AdminFormsListPage: React.FC = () => {
     const res = await listFormsPaged(page, PAGE_SIZE, undefined, courseId);
     setForms(res.data);
     setTotalForms(res.total);
-    const courseList = await listCourses();
-    setCourses(courseList);
     const map = await getCoursesForForms(res.data.map((f) => f.id));
     setFormCoursesMap(map);
     setLoading(false);
+  }, []);
+
+  const loadCoursesOptions = useCallback(async (page: number, search: string) => {
+    const res = await listCoursesPaged(page, 20, search ? search.trim() : undefined);
+    const opts = res.data.map((c) => ({ value: String(c.id), label: c.name }));
+    const withAll = page === 1 && !search?.trim() ? [{ value: '', label: 'All courses' }, ...opts] : opts;
+    return { options: withAll, hasMore: page * 20 < res.total };
   }, []);
 
   useEffect(() => {
@@ -208,16 +212,15 @@ export const AdminFormsListPage: React.FC = () => {
             <h2 className="text-lg font-bold text-[var(--text)]">All Forms</h2>
             <div className="flex items-center gap-3">
               <div className="w-56">
-                <Select
+                <SelectAsync
                   value={courseFilter}
                   onChange={(v) => {
                     setCourseFilter(v);
                     setCurrentPage(1);
                   }}
-                  options={[
-                    { value: '', label: 'All courses' },
-                    ...courses.map((c) => ({ value: String(c.id), label: c.name })),
-                  ]}
+                  loadOptions={loadCoursesOptions}
+                  placeholder="All courses"
+                  selectedLabel={courseFilter ? undefined : 'All courses'}
                 />
               </div>
               <div className="text-xs text-gray-500">Page {currentPage} of {totalPages} ({totalForms} total)</div>
