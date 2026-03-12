@@ -1169,8 +1169,8 @@ export const InstanceFillPage: React.FC = () => {
                                       const pm = (q.pdf_meta as Record<string, unknown>) || {};
                                       const textAboveHeader = String(pm.textAboveHeader ?? '').trim();
                                       const legacyAb = pm.additionalBlock as Record<string, unknown> | undefined;
-                                      const contentBlocks: Array<{ type: string; content?: string; questionId?: number; headerText?: string }> = Array.isArray(pm.contentBlocks)
-                                        ? (pm.contentBlocks as Array<{ type: string; content?: string; questionId?: number; headerText?: string }>)
+                                      const contentBlocks: Array<{ type: string; content?: string; questionId?: number; headerText?: string; imageUrl?: string; imageLayout?: string; imageWidthPercent?: number }> = Array.isArray(pm.contentBlocks)
+                                        ? (pm.contentBlocks as Array<{ type: string; content?: string; questionId?: number; headerText?: string; imageUrl?: string; imageLayout?: string; imageWidthPercent?: number }>)
                                         : legacyAb ? [{ type: String(legacyAb.type ?? 'instruction_block'), content: legacyAb.content as string | undefined, questionId: legacyAb.questionId as number | undefined }] : [];
                                       const wrapWithHeader = (key: string, headerText: string | undefined, content: React.ReactNode) => (
                                         <div key={key} className="mt-3">
@@ -1178,9 +1178,19 @@ export const InstanceFillPage: React.FC = () => {
                                           {content}
                                         </div>
                                       );
-                                      const renderBlock = (block: { type: string; content?: string; questionId?: number; headerText?: string }, key: string) => {
-                                        if (block.type === 'instruction_block' && block.content) {
-                                          return wrapWithHeader(key, block.headerText, <div className="text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: String(block.content) }} />);
+                                      const renderBlock = (block: { type: string; content?: string; questionId?: number; headerText?: string; imageUrl?: string; imageLayout?: string; imageWidthPercent?: number }, key: string) => {
+                                        if (block.type === 'instruction_block' && (block.content || (block as { imageUrl?: string }).imageUrl)) {
+                                          const content = block.content ? <div className="text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: String(block.content) }} /> : null;
+                                          const imgUrl = (block as { imageUrl?: string }).imageUrl;
+                                          const layout = (block as { imageLayout?: string }).imageLayout || 'side_by_side';
+                                          const pct = Math.max(20, Math.min(80, (block as { imageWidthPercent?: number }).imageWidthPercent || 50));
+                                          const imgEl = imgUrl ? <img src={imgUrl} alt="" className="max-w-full h-auto object-contain rounded border border-gray-200" style={{ maxHeight: 280 }} /> : null;
+                                          let blockContent: React.ReactNode;
+                                          if (!imgEl) blockContent = content;
+                                          else if (layout === 'above') blockContent = <div><div className="mb-2">{imgEl}</div>{content}</div>;
+                                          else if (layout === 'below') blockContent = <div>{content}<div className="mt-2">{imgEl}</div></div>;
+                                          else blockContent = <div className="flex gap-4 items-start"><div className="flex-1 min-w-0">{content}</div><div style={{ width: `${pct}%`, flexShrink: 0 }}>{imgEl}</div></div>;
+                                          return wrapWithHeader(key, block.headerText, blockContent);
                                         }
                                         const childQ = block.questionId ? section.questions.find((x) => x.id === block.questionId) : null;
                                         if (!childQ) return null;
@@ -1237,7 +1247,17 @@ export const InstanceFillPage: React.FC = () => {
                                       return (
                                         <div key={q.id} className="border border-gray-200 rounded-lg overflow-hidden">
                                           <div className="bg-gray-100 font-semibold text-gray-800 px-4 py-2 border-b border-gray-200">
-                                            {q.label}
+                                            {(() => {
+                                              const qPm = (q.pdf_meta as Record<string, unknown>) || {};
+                                              const imgUrl = qPm.imageUrl as string | undefined;
+                                              const layout = (qPm.imageLayout as string) || 'side_by_side';
+                                              const pct = Math.max(20, Math.min(80, (qPm.imageWidthPercent as number) || 50));
+                                              const imgEl = imgUrl ? <img src={imgUrl} alt="" className="max-w-full h-auto object-contain rounded border border-gray-200" style={{ maxHeight: 280 }} /> : null;
+                                              if (!imgEl) return <>{q.label}</>;
+                                              if (layout === 'above') return <><div className="mb-2">{imgEl}</div><div>{q.label}</div></>;
+                                              if (layout === 'below') return <><div>{q.label}</div><div className="mt-2">{imgEl}</div></>;
+                                              return <div className="flex gap-4 items-start"><div className="flex-1 min-w-0">{q.label}</div><div style={{ width: `${pct}%`, flexShrink: 0 }}>{imgEl}</div></div>;
+                                            })()}
                                           </div>
                                           <div className="p-4">
                                             {textAboveHeader && <div className="font-bold text-gray-900 mb-2">{textAboveHeader}</div>}
@@ -1344,8 +1364,8 @@ export const InstanceFillPage: React.FC = () => {
                                             const pm = (q.pdf_meta as Record<string, unknown>) || {};
                                             const textAboveHeader = String(pm.textAboveHeader ?? '').trim();
                                             const legacyAb = pm.additionalBlock as Record<string, unknown> | undefined;
-                                            const contentBlocks: Array<{ type: string; content?: string; questionId?: number; headerText?: string }> = Array.isArray(pm.contentBlocks)
-                                              ? (pm.contentBlocks as Array<{ type: string; content?: string; questionId?: number; headerText?: string }>)
+                                            const contentBlocks: Array<{ type: string; content?: string; questionId?: number; headerText?: string; imageUrl?: string; imageLayout?: string; imageWidthPercent?: number }> = Array.isArray(pm.contentBlocks)
+                                              ? (pm.contentBlocks as Array<{ type: string; content?: string; questionId?: number; headerText?: string; imageUrl?: string; imageLayout?: string; imageWidthPercent?: number }>)
                                               : legacyAb ? [{
                                                   type: String(legacyAb.type ?? 'instruction_block'),
                                                   content: legacyAb.content as string | undefined,
@@ -1357,9 +1377,19 @@ export const InstanceFillPage: React.FC = () => {
                                                 {content}
                                               </div>
                                             );
-                                            const renderBlock = (block: { type: string; content?: string; questionId?: number; headerText?: string }, key: string) => {
-                                              if (block.type === 'instruction_block' && block.content) {
-                                                return wrapWithHeader(key, block.headerText, <div className="text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: String(block.content) }} />);
+                                            const renderBlock = (block: { type: string; content?: string; questionId?: number; headerText?: string; imageUrl?: string; imageLayout?: string; imageWidthPercent?: number }, key: string) => {
+                                              if (block.type === 'instruction_block' && (block.content || block.imageUrl)) {
+                                                const content = block.content ? <div className="text-sm text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: String(block.content) }} /> : null;
+                                                const imgUrl = block.imageUrl;
+                                                const layout = block.imageLayout || 'side_by_side';
+                                                const pct = Math.max(20, Math.min(80, block.imageWidthPercent || 50));
+                                                const imgEl = imgUrl ? <img src={imgUrl} alt="" className="max-w-full h-auto object-contain rounded border border-gray-200" style={{ maxHeight: 280 }} /> : null;
+                                                let blockContent: React.ReactNode;
+                                                if (!imgEl) blockContent = content;
+                                                else if (layout === 'above') blockContent = <div><div className="mb-2">{imgEl}</div>{content}</div>;
+                                                else if (layout === 'below') blockContent = <div>{content}<div className="mt-2">{imgEl}</div></div>;
+                                                else blockContent = <div className="flex gap-4 items-start"><div className="flex-1 min-w-0">{content}</div><div style={{ width: `${pct}%`, flexShrink: 0 }}>{imgEl}</div></div>;
+                                                return wrapWithHeader(key, block.headerText, blockContent);
                                               }
                                               const childQ = block.questionId ? section.questions.find((x) => x.id === block.questionId) : null;
                                               if (!childQ) return null;

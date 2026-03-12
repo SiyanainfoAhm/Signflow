@@ -1359,8 +1359,18 @@ function buildHtml(data: {
               : legacyAb ? [{ type: String(legacyAb.type ?? 'instruction_block'), content: legacyAb.content as string, questionId: legacyAb.questionId as number }] : [];
             const blockHeaderHtml = (ht: string | undefined) => (ht ? `<div class="task-q-text-above-header">${ht}</div>` : '');
             for (const block of contentBlocks) {
-              if (block.type === 'instruction_block' && (block.content as string)) {
-                html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}<div class="task-q-additional-instruction">${block.content as string}</div></div>`;
+              if (block.type === 'instruction_block' && ((block.content as string) || (block as { imageUrl?: string }).imageUrl)) {
+                const blockContent = block.content as string;
+                const blockImgUrl = (block as { imageUrl?: string }).imageUrl;
+                const blockLayout = (block as { imageLayout?: string }).imageLayout || 'side_by_side';
+                const blockPct = Math.max(20, Math.min(80, (block as { imageWidthPercent?: number }).imageWidthPercent || 50));
+                const imgTag = blockImgUrl ? `<img src="${blockImgUrl}" alt="" style="max-width:100%;max-height:280px;object-fit:contain;border:1px solid #ddd;border-radius:4px" />` : '';
+                let innerHtml = '';
+                if (!imgTag) innerHtml = `<div class="task-q-additional-instruction">${blockContent || ''}</div>`;
+                else if (blockLayout === 'above') innerHtml = `<div style="margin-bottom:8px">${imgTag}</div><div class="task-q-additional-instruction">${blockContent || ''}</div>`;
+                else if (blockLayout === 'below') innerHtml = `<div class="task-q-additional-instruction">${blockContent || ''}</div><div style="margin-top:8px">${imgTag}</div>`;
+                else innerHtml = `<div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0"><div class="task-q-additional-instruction">${blockContent || ''}</div></div><div style="width:${blockPct}%;flex-shrink:0">${imgTag}</div></div>`;
+                html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}${innerHtml}</div>`;
               } else if ((block.type === 'short_text' || block.type === 'long_text') && block.questionId) {
                 const childQ = questions.find((x) => x.question.id === block.questionId);
                 if (childQ) {
@@ -1371,7 +1381,17 @@ function buildHtml(data: {
                   const qWordLimit = typeof cqPm?.wordLimit === 'number' && cqPm.wordLimit > 0 ? cqPm.wordLimit : null;
                   const blockClass = block.type === 'long_text' ? 'task-q-answer-block task-q-answer-large' : 'task-q-answer-block';
                   const blockStyle = qWordLimit ? `min-height:${heightFromWordLimit(qWordLimit)}px;max-height:${heightFromWordLimit(qWordLimit)}px;height:${heightFromWordLimit(qWordLimit)}px;` : '';
-                  html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}<div class="task-q-question-label">${cq.label}</div><div class="${blockClass}"${blockStyle ? ` style="${blockStyle}"` : ''}>${val ?? ''}</div></div>`;
+                  const cqImgUrl = cqPm?.imageUrl as string | undefined;
+                  const cqLayout = (cqPm?.imageLayout as string) || 'side_by_side';
+                  const cqPct = Math.max(20, Math.min(80, (cqPm?.imageWidthPercent as number) || 50));
+                  const cqImgTag = cqImgUrl ? `<img src="${cqImgUrl}" alt="" style="max-width:100%;max-height:280px;object-fit:contain;border:1px solid #ddd;border-radius:4px" />` : '';
+                  let labelHtml = `<div class="task-q-question-label">${cq.label}</div>`;
+                  if (cqImgTag) {
+                    if (cqLayout === 'above') labelHtml = `<div style="margin-bottom:8px">${cqImgTag}</div>${labelHtml}`;
+                    else if (cqLayout === 'below') labelHtml += `<div style="margin-top:8px">${cqImgTag}</div>`;
+                    else labelHtml = `<div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0">${labelHtml}</div><div style="width:${cqPct}%;flex-shrink:0">${cqImgTag}</div></div>`;
+                  }
+                  html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}${labelHtml}<div class="${blockClass}"${blockStyle ? ` style="${blockStyle}"` : ''}>${val ?? ''}</div></div>`;
                 }
               } else if (block.type === 'grid_table' && block.questionId) {
                 const childQ = questions.find((x) => x.question.id === block.questionId);
@@ -1442,11 +1462,19 @@ function buildHtml(data: {
           html += '<tr class="task-q-row-top">';
           html += `<td class="task-q-num-cell">Q${qNum}:</td>`;
           html += '<td class="task-q-question-label-cell">';
-          html += `<div class="task-q-question-label">${question.label}</div>`;
           const pmTop = (question.pdf_meta as Record<string, unknown>) || {};
           const textAboveHeader = String(pmTop.textAboveHeader ?? '').trim();
-          if (textAboveHeader) html += `<div class="task-q-text-above-header">${textAboveHeader}</div>`;
-          html += '</td>';
+          let labelCellContent = `<div class="task-q-question-label">${question.label}</div>` + (textAboveHeader ? `<div class="task-q-text-above-header">${textAboveHeader}</div>` : '');
+          const qImgUrl = pmTop?.imageUrl as string | undefined;
+          const qLayout = (pmTop?.imageLayout as string) || 'side_by_side';
+          const qPct = Math.max(20, Math.min(80, (pmTop?.imageWidthPercent as number) || 50));
+          if (qImgUrl) {
+            const qImgTag = `<img src="${qImgUrl}" alt="" style="max-width:100%;max-height:280px;object-fit:contain;border:1px solid #ddd;border-radius:4px" />`;
+            if (qLayout === 'above') labelCellContent = `<div style="margin-bottom:8px">${qImgTag}</div>${labelCellContent}`;
+            else if (qLayout === 'below') labelCellContent += `<div style="margin-top:8px">${qImgTag}</div>`;
+            else labelCellContent = `<div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0">${labelCellContent}</div><div style="width:${qPct}%;flex-shrink:0">${qImgTag}</div></div>`;
+          }
+          html += labelCellContent + '</td>';
           html += '<td class="task-q-satisfactory-cell">';
           html += '<div class="task-q-satisfactory-header">Satisfactory response</div>';
           html += '<div class="task-q-radio-group"><div class="task-q-radio"><span class="radio-circle' + (satYes ? ' filled' : '') + '"></span>Yes</div>';
@@ -1529,8 +1557,18 @@ function buildHtml(data: {
             : legacyAb ? [{ type: String(legacyAb.type ?? 'instruction_block'), content: legacyAb.content as string, questionId: legacyAb.questionId as number }] : [];
           const blockHeaderHtml = (ht: string | undefined) => (ht ? `<div class="task-q-text-above-header">${ht}</div>` : '');
           for (const block of contentBlocks) {
-            if (block.type === 'instruction_block' && (block.content as string)) {
-              html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}<div class="task-q-additional-instruction">${block.content as string}</div></div>`;
+            if (block.type === 'instruction_block' && ((block.content as string) || (block as { imageUrl?: string }).imageUrl)) {
+              const blockContent = block.content as string;
+              const blockImgUrl = (block as { imageUrl?: string }).imageUrl;
+              const blockLayout = (block as { imageLayout?: string }).imageLayout || 'side_by_side';
+              const blockPct = Math.max(20, Math.min(80, (block as { imageWidthPercent?: number }).imageWidthPercent || 50));
+              const imgTag = blockImgUrl ? `<img src="${blockImgUrl}" alt="" style="max-width:100%;max-height:280px;object-fit:contain;border:1px solid #ddd;border-radius:4px" />` : '';
+              let innerHtml = '';
+              if (!imgTag) innerHtml = `<div class="task-q-additional-instruction">${blockContent || ''}</div>`;
+              else if (blockLayout === 'above') innerHtml = `<div style="margin-bottom:8px">${imgTag}</div><div class="task-q-additional-instruction">${blockContent || ''}</div>`;
+              else if (blockLayout === 'below') innerHtml = `<div class="task-q-additional-instruction">${blockContent || ''}</div><div style="margin-top:8px">${imgTag}</div>`;
+              else innerHtml = `<div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0"><div class="task-q-additional-instruction">${blockContent || ''}</div></div><div style="width:${blockPct}%;flex-shrink:0">${imgTag}</div></div>`;
+              html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}${innerHtml}</div>`;
               continue;
             }
             if ((block.type === 'short_text' || block.type === 'long_text') && block.questionId) {
@@ -1543,7 +1581,17 @@ function buildHtml(data: {
                 const qWordLimit = typeof cqPm?.wordLimit === 'number' && cqPm.wordLimit > 0 ? cqPm.wordLimit : null;
                 const blockClass = block.type === 'long_text' ? 'task-q-answer-block task-q-answer-large' : 'task-q-answer-block';
                 const blockStyle = qWordLimit ? `min-height:${heightFromWordLimit(qWordLimit)}px;max-height:${heightFromWordLimit(qWordLimit)}px;height:${heightFromWordLimit(qWordLimit)}px;` : '';
-                html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}<div class="task-q-question-label">${cq.label}</div><div class="${blockClass}"${blockStyle ? ` style="${blockStyle}"` : ''}>${val ?? ''}</div></div>`;
+                const cqImgUrl = cqPm?.imageUrl as string | undefined;
+                const cqLayout = (cqPm?.imageLayout as string) || 'side_by_side';
+                const cqPct = Math.max(20, Math.min(80, (cqPm?.imageWidthPercent as number) || 50));
+                const cqImgTag = cqImgUrl ? `<img src="${cqImgUrl}" alt="" style="max-width:100%;max-height:280px;object-fit:contain;border:1px solid #ddd;border-radius:4px" />` : '';
+                let labelHtml = `<div class="task-q-question-label">${cq.label}</div>`;
+                if (cqImgTag) {
+                  if (cqLayout === 'above') labelHtml = `<div style="margin-bottom:8px">${cqImgTag}</div>${labelHtml}`;
+                  else if (cqLayout === 'below') labelHtml += `<div style="margin-top:8px">${cqImgTag}</div>`;
+                  else labelHtml = `<div style="display:flex;gap:16px;align-items:flex-start"><div style="flex:1;min-width:0">${labelHtml}</div><div style="width:${cqPct}%;flex-shrink:0">${cqImgTag}</div></div>`;
+                }
+                html += `<div class="task-q-content-block mt-3">${blockHeaderHtml(block.headerText)}${labelHtml}<div class="${blockClass}"${blockStyle ? ` style="${blockStyle}"` : ''}>${val ?? ''}</div></div>`;
               }
               continue;
             }

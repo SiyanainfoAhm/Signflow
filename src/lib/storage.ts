@@ -65,3 +65,33 @@ export async function uploadRowImage(
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return { url: data.publicUrl, error: null };
 }
+
+/**
+ * Upload question image to photomedia/skyline/{questionId}/{timestamp}_{filename}.{ext}
+ * Used for images embedded in questions (e.g. hierarchy diagrams, risk matrices).
+ * Returns the public URL of the uploaded file.
+ */
+export async function uploadQuestionImage(
+  questionId: number,
+  file: File
+): Promise<UploadResult> {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const sanitizedName = file.name
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[^a-zA-Z0-9-_]/g, '_')
+    .slice(0, 40);
+  const path = `${FOLDER}/${questionId}/${sanitizedName}_${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    upsert: false,
+    contentType: file.type,
+  });
+
+  if (error) {
+    console.error('uploadQuestionImage error', error);
+    return { url: null, error: error.message };
+  }
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
+}

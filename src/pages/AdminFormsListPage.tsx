@@ -74,7 +74,10 @@ export const AdminFormsListPage: React.FC = () => {
       qualification_name: qualificationName.trim(),
       unit_code: unitCode.trim(),
       unit_name: unitName.trim(),
-      assessment_tasks: [], // Default "Assessment - 1" / "Written Questions" created in form builder
+      assessment_tasks: [
+        { label: 'Assessment Task - 1', method: 'Written Questions' },
+        { label: 'Assessment Task - 2', method: 'Practical' },
+      ],
     });
     if (created) {
       setCurrentPage(1);

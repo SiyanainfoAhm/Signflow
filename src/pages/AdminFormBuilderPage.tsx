@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Eye, GripVertical, Trash2, ImagePlus, Copy, MoreVertical } from 'lucide-react';
+import { Eye, GripVertical, Trash2, ImagePlus, Copy, MoreVertical, ClipboardPaste } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -20,7 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '../lib/supabase';
 import { fetchForm, fetchFormSteps, updateForm, ensureTaskSectionsForForm, formNameExists } from '../lib/formEngine';
-import { uploadFormCoverImage, uploadRowImage } from '../lib/storage';
+import { uploadFormCoverImage, uploadRowImage, uploadQuestionImage } from '../lib/storage';
 import type { Form, FormStep, FormSection, FormQuestion, Json } from '../types/database';
 import { Card } from '../components/ui/Card';
 import { Loader } from '../components/ui/Loader';
@@ -37,6 +37,24 @@ import { DatePicker } from '../components/ui/DatePicker';
 import { cn } from '../components/utils/cn';
 
 const FLUSH_PENDING_EVENT = 'form-builder:flush-pending';
+
+async function pasteImageFromClipboard(): Promise<File | null> {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          const ext = type === 'image/png' ? 'png' : type === 'image/gif' ? 'gif' : type === 'image/webp' ? 'webp' : 'jpg';
+          return new File([blob], `pasted-image.${ext}`, { type });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Paste image failed:', e);
+  }
+  return null;
+}
 
 const QUESTION_TYPES = [
   { value: 'instruction_block', label: 'Instruction Block' },
@@ -79,6 +97,8 @@ const CONTENT_BLOCK_TYPES = [
 
 type ContentBlockType = 'instruction_block' | 'grid_table' | 'short_text' | 'long_text';
 
+type ImageLayoutOption = 'side_by_side' | 'above' | 'below';
+
 interface ContentBlock {
   type: ContentBlockType;
   content?: string;
@@ -86,6 +106,12 @@ interface ContentBlock {
   wordLimit?: number;
   /** Optional bold hint text above this block (e.g. "Painting terminology:", "Decorating terminologies:") */
   headerText?: string;
+  /** Image URL (stored in photomedia/skyline/{questionId}/) for instruction_block or question blocks */
+  imageUrl?: string;
+  /** Layout: side_by_side (text+image), above (image then question), below (question then image) */
+  imageLayout?: ImageLayoutOption;
+  /** Image width % in side_by_side layout (default 50) */
+  imageWidthPercent?: number;
 }
 
 function normalizeGridColumnType(raw: unknown): GridColumnType {
@@ -883,7 +909,23 @@ export const AdminFormBuilderPage: React.FC = () => {
     if (!step) return;
     const stepIndex = steps.findIndex((s) => s.id === stepId);
     const newSortOrder = step.sort_order + 1;
-    const newStepTitle = `${step.title} (Copy)`;
+    const taskLinkedModes = ['task_instructions', 'task_questions', 'task_results'];
+    const isTaskStep = step.sections.some((sec) => taskLinkedModes.includes(sec.pdf_render_mode));
+    let newStepTitle = `${step.title} (Copy)`;
+    if (isTaskStep && assessmentTasksGridQuestionId != null) {
+      const { data: existingRows } = await supabase
+        .from('skyline_form_question_rows')
+        .select('row_label')
+        .eq('question_id', assessmentTasksGridQuestionId);
+      const labels = (existingRows as { row_label: string }[]) ?? [];
+      const match = /Assessment\s+Task\s*-?\s*(\d+)/i;
+      let maxNum = 0;
+      for (const r of labels) {
+        const m = r.row_label?.match(match);
+        if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+      }
+      newStepTitle = `Assessment Task - ${maxNum + 1}`;
+    }
     const { data: newStep } = await supabase
       .from('skyline_form_steps')
       .insert({ form_id: Number(formId), title: newStepTitle, subtitle: step.subtitle, sort_order: newSortOrder })
@@ -897,7 +939,6 @@ export const AdminFormBuilderPage: React.FC = () => {
     }
     // If this step has task-linked sections, create a new row in the assessment tasks grid and link sections to it
     let newRowId: number | null = null;
-    const taskLinkedModes = ['task_instructions', 'task_questions', 'task_results'];
     const firstTaskSec = step.sections.find((sec) => taskLinkedModes.includes(sec.pdf_render_mode));
     const origRowId = firstTaskSec ? (firstTaskSec as FormSection & { assessment_task_row_id?: number | null }).assessment_task_row_id : null;
     if (assessmentTasksGridQuestionId != null && origRowId != null) {
@@ -927,7 +968,7 @@ export const AdminFormBuilderPage: React.FC = () => {
         .from('skyline_form_sections')
         .insert({
           step_id: (newStep as FormStep).id,
-          title: `${sec.title} (Copy)`,
+          title: sec.title,
           description: sec.description,
           pdf_render_mode: sec.pdf_render_mode,
           sort_order: sec.sort_order,
@@ -1013,7 +1054,7 @@ export const AdminFormBuilderPage: React.FC = () => {
       .from('skyline_form_sections')
       .insert({
         step_id: selectedStepId,
-        title: `${section.title} (Copy)`,
+        title: section.title,
         description: section.description,
         pdf_render_mode: section.pdf_render_mode,
         sort_order: section.sort_order + 1,
@@ -1027,50 +1068,8 @@ export const AdminFormBuilderPage: React.FC = () => {
         await supabase.from('skyline_form_sections').update({ sort_order: s.sort_order + 1 }).eq('id', s.id);
       }
     }
-    const { data: questions } = await supabase.from('skyline_form_questions').select('*').eq('section_id', section.id).order('sort_order');
+    // Don't duplicate questions - new section is empty (user adds questions as needed)
     const newQuestions: FormQuestion[] = [];
-    for (const q of (questions as FormQuestion[]) || []) {
-      const { data: newQ } = await supabase
-        .from('skyline_form_questions')
-        .insert({
-          section_id: (newSec as FormSection).id,
-          type: q.type,
-          code: q.code,
-          label: q.label,
-          help_text: q.help_text,
-          required: q.required ?? false,
-          sort_order: q.sort_order,
-          role_visibility: q.role_visibility ?? {},
-          role_editability: q.role_editability ?? {},
-          pdf_meta: q.pdf_meta ?? {},
-        })
-        .select('*')
-        .single();
-      if (!newQ) continue;
-      const { data: opts } = await supabase.from('skyline_form_question_options').select('*').eq('question_id', q.id).order('sort_order');
-      if ((opts as { value: string; label: string; sort_order: number }[])?.length) {
-        await supabase.from('skyline_form_question_options').insert(
-          (opts as { value: string; label: string; sort_order: number }[]).map((o) => ({
-            question_id: (newQ as FormQuestion).id,
-            value: o.value,
-            label: o.label,
-            sort_order: o.sort_order,
-          }))
-        );
-      }
-      const { data: rows } = await supabase.from('skyline_form_question_rows').select('*').eq('question_id', q.id).order('sort_order');
-      for (const r of (rows as { row_label: string; row_help: string | null; row_image_url: string | null; row_meta: unknown; sort_order: number }[]) || []) {
-        await supabase.from('skyline_form_question_rows').insert({
-          question_id: (newQ as FormQuestion).id,
-          row_label: r.row_label,
-          row_help: r.row_help,
-          row_image_url: r.row_image_url,
-          row_meta: r.row_meta,
-          sort_order: r.sort_order,
-        });
-      }
-      newQuestions.push(newQ as FormQuestion);
-    }
     setSteps((prev) =>
       prev.map((s) => {
         if (s.id !== selectedStepId) return s;
@@ -1539,9 +1538,39 @@ export const AdminFormBuilderPage: React.FC = () => {
                 ) : (
                   <>
                     <ImagePlus className="w-4 h-4 mr-1" />
-                    {form.cover_asset_url ? 'Change Cover' : 'Add Cover Image'}
+                    {form.cover_asset_url ? 'Change Cover' : 'Add Cover'}
                   </>
                 )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!formId || !form) return;
+                  const file = await pasteImageFromClipboard();
+                  if (!file) {
+                    alert('No image in clipboard. Take a screenshot (Print Screen) or copy an image first, then paste.');
+                    return;
+                  }
+                  setCoverUploading(true);
+                  try {
+                    const { url, error } = await uploadFormCoverImage(Number(formId), file);
+                    if (error) {
+                      alert(`Upload failed: ${error}`);
+                    } else if (url) {
+                      const { error: updateErr } = await updateForm(Number(formId), { cover_asset_url: url });
+                      if (updateErr) alert(`Save failed: ${updateErr.message}`);
+                      else setForm((prev) => (prev ? { ...prev, cover_asset_url: url } : null));
+                    }
+                  } finally {
+                    setCoverUploading(false);
+                  }
+                }}
+                disabled={coverUploading}
+                title="Paste from clipboard"
+              >
+                <ClipboardPaste className="w-4 h-4 mr-1" />
+                Paste
               </Button>
             <Button
             variant="outline"
@@ -1794,6 +1823,76 @@ export const AdminFormBuilderPage: React.FC = () => {
                         placeholder="e.g. 50"
                       />
                     )}
+                    {(q.type !== 'page_break') && (
+                      <div className="space-y-2">
+                        <span className="text-sm font-semibold text-gray-700">Question image (optional)</span>
+                        <p className="text-xs text-gray-500">Add a diagram or illustration with the question. Side-by-side for lengthy content, or image above for compact layouts. Works for all question types including grid tables.</p>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            id={`q-img-${q.id}`}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file || !file.type.startsWith('image/')) return;
+                              const { url, error } = await uploadQuestionImage(q.id, file);
+                              e.target.value = '';
+                              if (error) alert(`Upload failed: ${error}`);
+                              else if (url) updateQuestion(q.id, { pdf_meta: { ...pm, imageUrl: url } });
+                            }}
+                          />
+                          <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`q-img-${q.id}`)?.click()}>
+                            <ImagePlus className="w-4 h-4 mr-1" /> Upload
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              const file = await pasteImageFromClipboard();
+                              if (!file) {
+                                alert('No image in clipboard. Take a screenshot (Print Screen) or copy an image first, then paste.');
+                                return;
+                              }
+                              const { url, error } = await uploadQuestionImage(q.id, file);
+                              if (error) alert(`Upload failed: ${error}`);
+                              else if (url) updateQuestion(q.id, { pdf_meta: { ...pm, imageUrl: url } });
+                            }}
+                          >
+                            <ClipboardPaste className="w-4 h-4 mr-1" /> Paste
+                          </Button>
+                          {(pm.imageUrl as string) && (
+                            <>
+                              <img src={pm.imageUrl as string} alt="" className="h-12 object-contain border rounded" />
+                              <button type="button" className="text-xs text-red-600" onClick={() => updateQuestion(q.id, { pdf_meta: { ...pm, imageUrl: undefined, imageLayout: undefined, imageWidthPercent: undefined } })}>Remove</button>
+                            </>
+                          )}
+                        </div>
+                        {(pm.imageUrl as string) && (
+                          <div className="flex flex-wrap gap-4 pt-1">
+                            <div>
+                              <label className="text-xs text-gray-500">Layout</label>
+                              <Select
+                                value={(pm.imageLayout as string) || 'side_by_side'}
+                                onChange={(v) => updateQuestion(q.id, { pdf_meta: { ...pm, imageLayout: (v as ImageLayoutOption) || 'side_by_side' } })}
+                                options={[
+                                  { value: 'side_by_side', label: 'Text & image side-by-side' },
+                                  { value: 'above', label: 'Image above, question below' },
+                                  { value: 'below', label: 'Question above, image below' },
+                                ]}
+                              />
+                            </div>
+                            {((pm.imageLayout as string) || 'side_by_side') === 'side_by_side' && (
+                              <div>
+                                <label className="text-xs text-gray-500">Image width %</label>
+                                <Input type="number" min={20} max={80} value={(pm.imageWidthPercent as number) ?? 50} onChange={(e) => updateQuestion(q.id, { pdf_meta: { ...pm, imageWidthPercent: Math.max(20, Math.min(80, Number(e.target.value) || 50)) } })} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {q.type !== 'page_break' && (
                     <>
                       <div>
@@ -2037,13 +2136,82 @@ export const AdminFormBuilderPage: React.FC = () => {
                                     placeholder="e.g. Painting terminology:"
                                   />
                                   {block.type === 'instruction_block' && (
-                                    <Textarea
-                                      label="Content"
-                                      value={String(block.content ?? '').trim()}
-                                      onChange={(e) => updateBlock(idx, { content: e.target.value || undefined })}
-                                      placeholder="Enter instruction text (supports HTML)"
-                                      rows={3}
-                                    />
+                                    <>
+                                      <Textarea
+                                        label="Content"
+                                        value={String(block.content ?? '').trim()}
+                                        onChange={(e) => updateBlock(idx, { content: e.target.value || undefined })}
+                                        placeholder="Enter instruction text (supports HTML)"
+                                        rows={3}
+                                      />
+                                      <div className="space-y-2">
+                                        <span className="text-xs font-medium text-gray-600">Image (optional)</span>
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            id={`block-img-${q.id}-${idx}`}
+                                            onChange={async (e) => {
+                                              const file = e.target.files?.[0];
+                                              if (!file || !file.type.startsWith('image/')) return;
+                                              const { url, error } = await uploadQuestionImage(q.id, file);
+                                              e.target.value = '';
+                                              if (error) alert(`Upload failed: ${error}`);
+                                              else if (url) updateBlock(idx, { imageUrl: url });
+                                            }}
+                                          />
+                                          <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`block-img-${q.id}-${idx}`)?.click()}>
+                                            <ImagePlus className="w-4 h-4 mr-1" /> Upload
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={async () => {
+                                              const file = await pasteImageFromClipboard();
+                                              if (!file) {
+                                                alert('No image in clipboard. Take a screenshot (Print Screen) or copy an image first, then paste.');
+                                                return;
+                                              }
+                                              const { url, error } = await uploadQuestionImage(q.id, file);
+                                              if (error) alert(`Upload failed: ${error}`);
+                                              else if (url) updateBlock(idx, { imageUrl: url });
+                                            }}
+                                          >
+                                            <ClipboardPaste className="w-4 h-4 mr-1" /> Paste
+                                          </Button>
+                                          {block.imageUrl && (
+                                            <>
+                                              <img src={block.imageUrl} alt="" className="h-12 object-contain border rounded" />
+                                              <button type="button" className="text-xs text-red-600" onClick={() => updateBlock(idx, { imageUrl: undefined })}>Remove</button>
+                                            </>
+                                          )}
+                                        </div>
+                                        {block.imageUrl && (
+                                          <div className="flex flex-wrap gap-4">
+                                            <div>
+                                              <label className="text-xs text-gray-500">Layout</label>
+                                              <Select
+                                                value={block.imageLayout || 'side_by_side'}
+                                                onChange={(v) => updateBlock(idx, { imageLayout: (v as ImageLayoutOption) || 'side_by_side' })}
+                                                options={[
+                                                  { value: 'side_by_side', label: 'Text & image side-by-side' },
+                                                  { value: 'above', label: 'Image above, text below' },
+                                                  { value: 'below', label: 'Text above, image below' },
+                                                ]}
+                                              />
+                                            </div>
+                                            {(block.imageLayout || 'side_by_side') === 'side_by_side' && (
+                                              <div>
+                                                <label className="text-xs text-gray-500">Image width %</label>
+                                                <Input type="number" min={20} max={80} value={block.imageWidthPercent ?? 50} onChange={(e) => updateBlock(idx, { imageWidthPercent: Math.max(20, Math.min(80, Number(e.target.value) || 50)) })} />
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </>
                                   )}
                                   {(block.type === 'short_text' || block.type === 'long_text') && (() => {
                                     const childQ = block.questionId ? selectedSection.questions.find((x) => x.id === block.questionId) : null;
@@ -2051,9 +2219,66 @@ export const AdminFormBuilderPage: React.FC = () => {
                                     const childPm = (childQ.pdf_meta as Record<string, unknown>) || {};
                                     const wl = normalizeWordLimit(childPm.wordLimit);
                                     return (
-                                      <div className="space-y-1">
+                                      <div className="space-y-2">
                                         <Input label="Label" value={childQ.label} onChange={(e) => updateQuestion(childQ.id, { label: e.target.value })} />
                                         <Input label="Word limit" type="number" min={1} value={wl ?? ''} onChange={(e) => updateQuestion(childQ.id, { pdf_meta: { ...childPm, wordLimit: normalizeWordLimit(e.target.value) } })} placeholder="e.g. 100" />
+                                        <div className="space-y-1">
+                                          <span className="text-xs font-medium text-gray-600">Image (optional)</span>
+                                          <div className="flex flex-wrap gap-2 items-center">
+                                            <input
+                                              type="file"
+                                              accept="image/*"
+                                              className="hidden"
+                                              id={`block-q-img-${childQ.id}`}
+                                              onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file || !file.type.startsWith('image/')) return;
+                                                const { url, error } = await uploadQuestionImage(childQ.id, file);
+                                                e.target.value = '';
+                                                if (error) alert(`Upload failed: ${error}`);
+                                                else if (url) updateQuestion(childQ.id, { pdf_meta: { ...childPm, imageUrl: url } });
+                                              }}
+                                            />
+                                            <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`block-q-img-${childQ.id}`)?.click()}>
+                                              <ImagePlus className="w-4 h-4 mr-1" /> Upload
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={async () => {
+                                                const file = await pasteImageFromClipboard();
+                                                if (!file) {
+                                                  alert('No image in clipboard. Take a screenshot (Print Screen) or copy an image first, then paste.');
+                                                  return;
+                                                }
+                                                const { url, error } = await uploadQuestionImage(childQ.id, file);
+                                                if (error) alert(`Upload failed: ${error}`);
+                                                else if (url) updateQuestion(childQ.id, { pdf_meta: { ...childPm, imageUrl: url } });
+                                              }}
+                                            >
+                                              <ClipboardPaste className="w-4 h-4 mr-1" /> Paste
+                                            </Button>
+                                            {(childPm.imageUrl as string) && (
+                                              <>
+                                                <img src={childPm.imageUrl as string} alt="" className="h-12 object-contain border rounded" />
+                                                <button type="button" className="text-xs text-red-600" onClick={() => updateQuestion(childQ.id, { pdf_meta: { ...childPm, imageUrl: undefined, imageLayout: undefined, imageWidthPercent: undefined } })}>Remove</button>
+                                              </>
+                                            )}
+                                          </div>
+                                          {(childPm.imageUrl as string) && (
+                                            <Select
+                                              label="Image layout"
+                                              value={(childPm.imageLayout as string) || 'side_by_side'}
+                                              onChange={(v) => updateQuestion(childQ.id, { pdf_meta: { ...childPm, imageLayout: (v as ImageLayoutOption) || 'side_by_side' } })}
+                                              options={[
+                                                { value: 'side_by_side', label: 'Text & image side-by-side' },
+                                                { value: 'above', label: 'Image above' },
+                                                { value: 'below', label: 'Image below' },
+                                              ]}
+                                            />
+                                          )}
+                                        </div>
                                       </div>
                                     );
                                   })()}
@@ -2321,7 +2546,13 @@ function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onSteps
   }, []);
 
   const addRow = async () => {
-    const defaultLabel = '';
+    const match = /Assessment\s+Task\s*-?\s*(\d+)/i;
+    let maxNum = 0;
+    for (const r of rows) {
+      const m = r.row_label?.match(match);
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+    }
+    const defaultLabel = sectionPdfMode === 'assessment_tasks' ? `Assessment Task - ${maxNum + 1}` : '';
     const { data } = await supabase
       .from('skyline_form_question_rows')
       .insert({ question_id: questionId, row_label: defaultLabel, sort_order: rows.length })
@@ -2463,6 +2694,27 @@ function QuestionRowsEditor({ questionId, sectionPdfMode, formId, steps, onSteps
                     onClick={() => document.getElementById(`row-image-${r.id}`)?.click()}
                   >
                     {uploadingRowId === r.id ? 'Uploading…' : <ImagePlus className="w-4 h-4" />}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!formId || uploadingRowId === r.id}
+                    title="Paste from clipboard (e.g. screenshot)"
+                    onClick={async () => {
+                      const file = await pasteImageFromClipboard();
+                      if (!file) {
+                        alert('No image in clipboard. Take a screenshot (Print Screen) or copy an image first, then paste.');
+                        return;
+                      }
+                      setUploadingRowId(r.id);
+                      const { url, error } = await uploadRowImage(formId!, questionId, r.id, file);
+                      setUploadingRowId(null);
+                      if (error) alert(`Upload failed: ${error}`);
+                      else if (url) updateRow(r.id, { row_image_url: url });
+                    }}
+                  >
+                    <ClipboardPaste className="w-4 h-4" />
                   </Button>
                   <Input
                     value={r.row_image_url || ''}

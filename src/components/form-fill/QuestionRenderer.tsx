@@ -22,6 +22,73 @@ const normalizeWordLimit = (raw: unknown): number | null => {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 };
 
+type ImageLayoutOption = 'side_by_side' | 'above' | 'below';
+
+function QuestionLabelWithImage({
+  label,
+  helpText,
+  imageUrl,
+  imageLayout = 'side_by_side',
+  imageWidthPercent = 50,
+  children,
+}: {
+  label: React.ReactNode;
+  helpText?: string | null;
+  imageUrl?: string | null;
+  imageLayout?: ImageLayoutOption;
+  imageWidthPercent?: number;
+  children?: React.ReactNode;
+}) {
+  const imgEl = imageUrl ? (
+    <img src={imageUrl} alt="" className="max-w-full h-auto object-contain rounded border border-gray-200" style={{ maxHeight: 280 }} />
+  ) : null;
+  const textBlock = (
+    <div className="flex-1 min-w-0">
+      <div className="text-sm font-medium text-gray-700 whitespace-pre-line">{label}</div>
+      {helpText && <div className="text-xs text-gray-500 mt-1">{helpText}</div>}
+      {children}
+    </div>
+  );
+
+  if (!imgEl) {
+    return (
+      <div>
+        <div className="text-sm font-medium text-gray-700 whitespace-pre-line">{label}</div>
+        {helpText && <div className="text-xs text-gray-500 mt-1">{helpText}</div>}
+        {children}
+      </div>
+    );
+  }
+
+  if (imageLayout === 'above') {
+    return (
+      <div>
+        <div className="mb-2">{imgEl}</div>
+        {textBlock}
+      </div>
+    );
+  }
+  if (imageLayout === 'below') {
+    return (
+      <div>
+        {textBlock}
+        <div className="mt-2">{imgEl}</div>
+      </div>
+    );
+  }
+  const pct = Math.max(20, Math.min(80, imageWidthPercent || 50));
+  return (
+    <div className="flex gap-4 items-start">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-gray-700 whitespace-pre-line">{label}</div>
+        {helpText && <div className="text-xs text-gray-500 mt-1">{helpText}</div>}
+        {children}
+      </div>
+      <div style={{ width: `${pct}%`, flexShrink: 0 }}>{imgEl}</div>
+    </div>
+  );
+}
+
 interface QuestionRendererProps {
   question: FormQuestionWithOptionsAndRows;
   value: string | number | boolean | Record<string, unknown> | string[] | null;
@@ -52,12 +119,16 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   const pm = (question.pdf_meta as Record<string, unknown>) || {};
   const wordLimit = normalizeWordLimit(pm.wordLimit);
   if (question.type === 'instruction_block') {
+    const imgUrl = pm.imageUrl as string | undefined;
     return (
       <div className="py-2">
-        <div className="text-sm font-medium text-gray-700 whitespace-pre-line">{question.label}</div>
-        {question.help_text && (
-          <div className="text-xs text-gray-500 mt-1">{question.help_text}</div>
-        )}
+        <QuestionLabelWithImage
+          label={question.label}
+          helpText={question.help_text}
+          imageUrl={imgUrl}
+          imageLayout={(pm.imageLayout as ImageLayoutOption) || 'side_by_side'}
+          imageWidthPercent={(pm.imageWidthPercent as number) ?? 50}
+        />
       </div>
     );
   }
@@ -123,6 +194,34 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         />
       );
     }
+    const imgUrl = pm.imageUrl as string | undefined;
+    if (imgUrl) {
+      return (
+        <div>
+          <QuestionLabelWithImage
+            label={question.label}
+            helpText={question.help_text}
+            imageUrl={imgUrl}
+            imageLayout={(pm.imageLayout as ImageLayoutOption) || 'side_by_side'}
+            imageWidthPercent={(pm.imageWidthPercent as number) ?? 50}
+          >
+            <div className="mt-2">
+              <Input
+                value={(value as string) || ''}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  onChange(wordLimit ? truncateToWordLimit(next, wordLimit) : next);
+                }}
+                disabled={disabled}
+                error={error}
+                required={question.required && !disabled}
+                helperText={wordLimit ? `${countWords(String(value || ''))} / ${wordLimit} words` : undefined}
+              />
+            </div>
+          </QuestionLabelWithImage>
+        </div>
+      );
+    }
     return (
       <Input
         label={question.label}
@@ -140,6 +239,34 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
   }
 
   if (question.type === 'long_text') {
+    const imgUrl = pm.imageUrl as string | undefined;
+    if (imgUrl) {
+      return (
+        <div>
+          <QuestionLabelWithImage
+            label={question.label}
+            helpText={question.help_text}
+            imageUrl={imgUrl}
+            imageLayout={(pm.imageLayout as ImageLayoutOption) || 'side_by_side'}
+            imageWidthPercent={(pm.imageWidthPercent as number) ?? 50}
+          >
+            <div className="mt-2">
+              <Textarea
+                value={(value as string) || ''}
+                onChange={(e) => onChange(e.target.value)}
+                disabled={disabled}
+                error={error}
+                required={question.required && !disabled}
+                helperText={wordLimit ? `${countWords(String(value || ''))} / ${wordLimit} words` : undefined}
+                rows={wordLimit ? Math.max(2, Math.min(10, Math.ceil(wordLimit / 10))) : 8}
+                maxWords={wordLimit ?? undefined}
+                fixedHeightFromWordLimit={!!wordLimit}
+              />
+            </div>
+          </QuestionLabelWithImage>
+        </div>
+      );
+    }
     return (
       <Textarea
         label={question.label}

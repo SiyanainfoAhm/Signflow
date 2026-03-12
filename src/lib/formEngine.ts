@@ -2334,9 +2334,10 @@ async function createCompulsoryFormStructure(formId: number, assessmentTasks?: A
           { question_id: qid, row_label: assessmentTasks.task2_label, row_help: assessmentTasks.task2_method, sort_order: 1 },
         ];
       } else {
-        // Default fallback: single assessment created automatically
+        // Default fallback: Assessment Task - 1 and Assessment Task - 2
         rowsToInsert = [
-          { question_id: qid, row_label: 'Assessment - 1', row_help: 'Written Questions', sort_order: 0 },
+          { question_id: qid, row_label: 'Assessment Task - 1', row_help: 'Written Questions', sort_order: 0 },
+          { question_id: qid, row_label: 'Assessment Task - 2', row_help: 'Practical', sort_order: 1 },
         ];
       }
       
@@ -3076,6 +3077,53 @@ export async function duplicateForm(formId: number): Promise<Form | null> {
           if (!rowErr && newRowData) {
             rowIdMap.set(row.id, (newRowData as { id: number }).id);
           }
+        }
+      }
+    }
+  }
+
+  // Renumber assessment tasks in duplicated form (e.g. 1,2 -> 3,4)
+  const { data: newSteps } = await supabase.from('skyline_form_steps').select('id').eq('form_id', newFormId).order('sort_order');
+  const newStepIds = (newSteps as { id: number }[])?.map((s) => s.id) ?? [];
+  const { data: assessmentSecs } = await supabase
+    .from('skyline_form_sections')
+    .select('id')
+    .in('step_id', newStepIds)
+    .eq('pdf_render_mode', 'assessment_tasks');
+  const assessmentSecId = (assessmentSecs as { id: number }[])?.[0]?.id;
+  if (assessmentSecId) {
+    const { data: assessmentQ } = await supabase
+      .from('skyline_form_questions')
+      .select('id')
+      .eq('section_id', assessmentSecId)
+      .eq('code', 'assessment.tasks')
+      .single();
+    if (assessmentQ) {
+      const qid = (assessmentQ as { id: number }).id;
+      const { data: taskRows } = await supabase
+        .from('skyline_form_question_rows')
+        .select('id, row_label, sort_order')
+        .eq('question_id', qid)
+        .order('sort_order');
+      const rows = (taskRows as { id: number; row_label: string; sort_order: number }[]) ?? [];
+      const match = /Assessment\s+Task\s*-?\s*(\d+)/i;
+      let maxNum = 0;
+      for (const r of rows) {
+        const m = r.row_label.match(match);
+        if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+      }
+      const startNew = maxNum + 1;
+      for (let i = 0; i < rows.length; i++) {
+        const newLabel = `Assessment Task - ${startNew + i}`;
+        await supabase.from('skyline_form_question_rows').update({ row_label: newLabel }).eq('id', rows[i].id);
+        const { data: sectionsWithRow } = await supabase
+          .from('skyline_form_sections')
+          .select('step_id')
+          .in('step_id', newStepIds)
+          .eq('assessment_task_row_id', rows[i].id);
+        const stepIdsToUpdate = [...new Set(((sectionsWithRow as { step_id: number }[]) ?? []).map((s) => s.step_id))];
+        for (const sid of stepIdsToUpdate) {
+          await supabase.from('skyline_form_steps').update({ title: newLabel }).eq('id', sid);
         }
       }
     }
