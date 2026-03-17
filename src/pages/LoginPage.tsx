@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { loginWithEmailPassword } from '../lib/formEngine';
+import { loginWithOtp, requestOtp } from '../lib/formEngine';
 import { useAuth } from '../contexts/AuthContext';
 import { isValidInstitutionalEmail } from '../lib/emailUtils';
 import { Navigate } from 'react-router-dom';
@@ -11,7 +11,8 @@ import { toast } from '../utils/toast';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const { user, login } = useAuth();
@@ -25,27 +26,34 @@ export const LoginPage: React.FC = () => {
   }
 
   const emailValid = isValidInstitutionalEmail(email);
-  const canSubmit = email.trim() && password && emailValid;
+  const canSendOtp = email.trim() && emailValid && !otpSent;
+  const canVerifyOtp = email.trim() && otp.trim().length >= 6;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password) {
-      toast.error('Email and password are required');
-      return;
-    }
-    if (!emailValid) {
-      toast.error('Only @slit.edu.au emails are allowed');
-      return;
-    }
+  const handleSendOtp = async () => {
+    if (!email.trim() || !emailValid) return;
     setLoading(true);
-    const user = await loginWithEmailPassword(email.trim(), password);
+    const res = await requestOtp(email.trim());
     setLoading(false);
-    if (user) {
-      login(user);
-      toast.success(`Welcome, ${user.full_name}`);
+    if (res.success) {
+      setOtpSent(true);
+      toast.success('OTP sent! Check your email. Valid for 10 minutes.');
+    } else {
+      toast.error(res.message || 'Failed to send OTP');
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !otp.trim()) return;
+    setLoading(true);
+    const u = await loginWithOtp(email.trim(), otp.trim());
+    setLoading(false);
+    if (u) {
+      login(u);
+      toast.success(`Welcome, ${u.full_name}`);
       navigate(from, { replace: true });
     } else {
-      toast.error('Invalid email or password');
+      toast.error('Invalid or expired OTP');
     }
   };
 
@@ -80,7 +88,6 @@ export const LoginPage: React.FC = () => {
       {/* Right: Login form */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12 bg-[var(--bg)]">
         <div className="w-full max-w-md">
-          {/* Crest on mobile */}
           <div className="lg:hidden flex justify-center mb-8">
             {!logoError ? (
               <img
@@ -90,7 +97,7 @@ export const LoginPage: React.FC = () => {
                 onError={() => setLogoError(true)}
               />
             ) : (
-              <div className="h-20 flex items-center justify-center px-6 rounded-lg bg-[#F47A1F]/10">
+              <div className="h-20 flex justify-center items-center px-6 rounded-lg bg-[#F47A1F]/10">
                 <span className="text-xl font-bold text-[#F47A1F]">SKYLINE</span>
               </div>
             )}
@@ -100,55 +107,112 @@ export const LoginPage: React.FC = () => {
               <h1 className="text-2xl font-bold text-[var(--text)]">Welcome back</h1>
               <p className="text-gray-600 mt-2">Sign in with your Skyline email to access the app</p>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Email
-                </label>
-                <Input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@slit.edu.au or name@student.slit.edu.au"
-                  required
-                  autoComplete="email"
-                  className={`h-12 ${email.trim() && !emailValid ? 'border-amber-500 focus:ring-amber-500' : ''}`}
-                />
-                {email.trim() && !emailValid && (
-                  <p className="mt-1.5 text-sm text-amber-600">Only @slit.edu.au or @student.slit.edu.au emails can sign in.</p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Password
-                </label>
-                <Input
-                  id="login-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  autoComplete="current-password"
-                  className="h-12"
-                />
-              </div>
-              <Button
-                type="submit"
-                disabled={loading || !canSubmit}
-                className="w-full h-12 text-base font-semibold"
-              >
-                {loading ? (
+
+            <div>
+              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Email
+              </label>
+              <Input
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (otpSent) setOtpSent(false);
+                }}
+                placeholder="name@slit.edu.au or name@student.slit.edu.au"
+                required
+                autoComplete="email"
+                className={`h-12 ${email.trim() && !emailValid ? 'border-amber-500 focus:ring-amber-500' : ''}`}
+              />
+              {email.trim() && !emailValid && (
+                <p className="mt-1.5 text-sm text-amber-600">Only @slit.edu.au or @student.slit.edu.au emails can sign in.</p>
+              )}
+            </div>
+
+            <div className="space-y-5 mt-5">
+                {!otpSent ? (
                   <>
-                    <Loader variant="dots" size="sm" inline className="mr-2" />
-                    Signing in...
+                    <p className="text-sm text-gray-600">
+                      Request a one-time code sent to your email. Valid for 10 minutes.
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={loading || !canSendOtp}
+                      className="w-full h-12 text-base font-semibold"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader variant="dots" size="sm" inline className="mr-2" />
+                          Sending...
+                        </>
+                      ) : (
+                        'Send OTP'
+                      )}
+                    </Button>
                   </>
                 ) : (
-                  'Sign in'
+                  <form onSubmit={handleOtpSubmit} className="space-y-5">
+                    <div>
+                      <label htmlFor="login-otp" className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Enter 6-digit OTP
+                      </label>
+                      <Input
+                        id="login-otp"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={otp}
+                        onChange={(e) => {
+                          const next = e.target.value.replace(/\D/g, '');
+                          setOtp(next);
+                          if (next.length === 6 && !loading && email.trim()) {
+                            // Auto-submit when 6 digits are entered
+                            void (async () => {
+                              setLoading(true);
+                              const u = await loginWithOtp(email.trim(), next);
+                              setLoading(false);
+                              if (u) {
+                                login(u);
+                                toast.success(`Welcome, ${u.full_name}`);
+                                navigate(from, { replace: true });
+                              } else {
+                                toast.error('Invalid or expired OTP');
+                              }
+                            })();
+                          }
+                        }}
+                        placeholder="000000"
+                        autoComplete="one-time-code"
+                        className="h-12 text-center text-lg tracking-widest"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={loading || !canVerifyOtp}
+                      className="w-full h-12 text-base font-semibold"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader variant="dots" size="sm" inline className="mr-2" />
+                          Verifying...
+                        </>
+                      ) : (
+                        'Verify & Sign in'
+                      )}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => { setOtpSent(false); setOtp(''); }}
+                      className="w-full text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      Use a different email or resend OTP
+                    </button>
+                  </form>
                 )}
-              </Button>
-            </form>
+              </div>
+
             <p className="mt-6 text-center text-xs text-gray-500">
               Secure access for authorised users only
             </p>

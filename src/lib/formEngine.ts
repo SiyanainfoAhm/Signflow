@@ -936,21 +936,39 @@ export interface StudentLoginResult {
   error?: string;
 }
 
-/** Student login via email+password for generic link access. Returns URL with token to redirect to. */
-export async function studentLoginForForm(formId: number, email: string, password: string): Promise<StudentLoginResult> {
-  const { data: authData, error: authError } = await supabase.rpc('skyline_student_authenticate', {
-    p_email: email.trim(),
-    p_password: password,
-  });
-  if (authError) {
-    return { success: false, error: 'Authentication failed.' };
+/** Request OTP via Edge Function (OTP is created and email sent server-side; never exposed to client). */
+async function requestOtpViaEdgeFunction(email: string, type: 'staff' | 'student'): Promise<{ success: boolean; message: string }> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  if (!supabaseUrl?.trim() || !anonKey?.trim()) {
+    return { success: false, message: 'App is not configured. Contact your administrator.' };
   }
-  const rows = authData as Array<{ id: number; email: string }> | null;
-  if (!rows || rows.length === 0) {
-    return { success: false, error: 'Invalid email or password.' };
+  const url = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/skyline-request-otp`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ email: email.trim(), type }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
+    const success = !!json.success;
+    const message = typeof json.message === 'string' ? json.message : (success ? 'OTP sent. Check your email. Valid for 10 minutes.' : 'Failed to request OTP.');
+    return { success, message };
+  } catch (e) {
+    console.error('requestOtp edge function error', e);
+    return { success: false, message: 'Failed to request OTP. Please try again.' };
   }
-  const studentId = rows[0].id;
+}
 
+/** Request OTP for student form access. Uses Edge Function so OTP is never sent to the client. */
+export async function requestStudentOtp(email: string): Promise<{ success: boolean; message: string }> {
+  return requestOtpViaEdgeFunction(email.trim(), 'student');
+}
+
+async function studentFormAccessFromId(formId: number, studentId: number): Promise<StudentLoginResult> {
   const instance = await getInstanceForStudentAndForm(formId, studentId);
   if (!instance) {
     return {
@@ -1022,6 +1040,23 @@ export async function studentLoginForForm(formId: number, email: string, passwor
   const url = await issueInstanceAccessLink(instance.id, 'student', undefined, useExtendedExpiry, resubmissionExpiresAt);
   if (!url) return { success: false, error: 'Failed to generate access link.' };
   return { success: true, url, instanceId: instance.id };
+}
+
+/** Student login via OTP for generic link access. Returns URL with token to redirect to. */
+export async function studentLoginWithOtpForForm(formId: number, email: string, otp: string): Promise<StudentLoginResult> {
+  const { data: authData, error: authError } = await supabase.rpc('skyline_verify_student_otp', {
+    p_email: email.trim(),
+    p_otp: otp.trim(),
+  });
+  if (authError) {
+    return { success: false, error: 'Authentication failed.' };
+  }
+  const rows = authData as Array<{ id: number; email: string }> | null;
+  if (!rows || rows.length === 0) {
+    return { success: false, error: 'Invalid or expired OTP.' };
+  }
+  const studentId = rows[0].id;
+  return studentFormAccessFromId(formId, studentId);
 }
 
 export async function setStudentPassword(studentId: number, password: string): Promise<{ success: boolean; message: string }> {
@@ -1113,10 +1148,38 @@ export function setStoredUser(user: AppUser | null): void {
   }
 }
 
+/** Request OTP for staff login. Uses Edge Function so OTP is created and email sent server-side (never exposed in network). */
+export async function requestOtp(email: string): Promise<{ success: boolean; message: string }> {
+  return requestOtpViaEdgeFunction(email.trim(), 'staff');
+}
+
+/** Login with OTP (no password). */
+export async function loginWithOtp(email: string, otp: string): Promise<AppUser | null> {
+  const { data, error } = await supabase.rpc('skyline_verify_otp_login', {
+    p_email: email.trim(),
+    p_otp: otp.trim(),
+  });
+  if (error) {
+    console.error('loginWithOtp error', error);
+    return null;
+  }
+  const rows = (data as Array<Record<string, unknown>>) || [];
+  const row = rows[0];
+  if (!row || !row.id) return null;
+  return {
+    id: Number(row.id),
+    full_name: String(row.full_name ?? ''),
+    email: String(row.email ?? ''),
+    phone: row.phone ? String(row.phone) : null,
+    status: row.status ? String(row.status) : null,
+    role: (row.role as AppUserRole) ?? 'trainer',
+  };
+}
+
 export async function loginWithEmailPassword(email: string, password: string): Promise<AppUser | null> {
   const { data, error } = await supabase.rpc('skyline_login', {
     p_email: email.trim(),
-    p_password: password,
+    p_password: password || null,
   });
   if (error) {
     console.error('login error', error);
@@ -1206,7 +1269,7 @@ export async function listTrainersPaged(
   };
 }
 
-/** List users with optional role and status filters. */
+/** List users with optional role and status filters. Excludes master user. */
 export async function listUsersPaged(
   page = 1,
   pageSize = 20,
@@ -1219,7 +1282,8 @@ export async function listUsersPaged(
   let query = supabase
     .from('skyline_users')
     .select('*', { count: 'exact' })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .or('is_master.eq.false,is_master.is.null');
   if (roleFilter) query = query.eq('role', roleFilter);
   if (statusFilter) query = query.eq('status', statusFilter);
   const q = (search ?? '').trim();
@@ -1240,13 +1304,14 @@ export async function listUsersPaged(
   };
 }
 
-/** Users who can be assigned as batch trainers (role trainer or admin, active). */
+/** Users who can be assigned as batch trainers (role trainer or admin, active). Excludes master. */
 export async function listUsersForBatchAssignment(): Promise<UserRow[]> {
   const { data, error } = await supabase
     .from('skyline_users')
     .select('*')
     .in('role', ['trainer', 'admin'])
     .eq('status', 'active')
+    .or('is_master.eq.false,is_master.is.null')
     .order('full_name');
   if (error) {
     console.error('listUsersForBatchAssignment error', error);
@@ -1267,6 +1332,7 @@ export async function listUsersForBatchAssignmentPaged(
     .select('*', { count: 'exact' })
     .in('role', ['trainer', 'admin'])
     .eq('status', 'active')
+    .or('is_master.eq.false,is_master.is.null')
     .order('full_name');
   if (search && search.trim()) {
     query = query.or(`full_name.ilike.%${search.trim()}%,email.ilike.%${search.trim()}%`);

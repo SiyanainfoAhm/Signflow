@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Mail, Phone, Pencil, Shield, UserRound, Building2 } from 'lucide-react';
-import { listUsersPaged, createUser, updateUser, adminSetPassword, listBatchesPaged } from '../lib/formEngine';
+import { listUsersPaged, createUser, updateUser, listBatchesPaged } from '../lib/formEngine';
 import { buildUserEmail, buildUserEmailFromLocal, getUserEmailLocalPart, STAFF_DOMAIN } from '../lib/emailUtils';
 import type { UserRow } from '../lib/formEngine';
 import { Card } from '../components/ui/Card';
@@ -55,7 +55,6 @@ export const AdminUsersPage: React.FC = () => {
     phone: '',
     status: 'active',
     role: 'trainer' as 'admin' | 'trainer' | 'office',
-    password: '',
   });
 
   const [editDraft, setEditDraft] = useState<{
@@ -65,7 +64,6 @@ export const AdminUsersPage: React.FC = () => {
     phone: string;
     status: string;
     role: string;
-    newPassword: string;
   } | null>(null);
 
   const userFullName = `${draft.first_name} ${draft.last_name}`.trim();
@@ -79,9 +77,7 @@ export const AdminUsersPage: React.FC = () => {
   const digitsOnly = (val: string) => val.replace(/\D/g, '');
 
   const validateUserForm = (
-    form: { first_name: string; last_name: string; email_local: string; phone: string; status: string; role: string },
-    requirePassword = false,
-    password?: string
+    form: { first_name: string; last_name: string; email_local: string; phone: string; status: string; role: string }
   ): string | null => {
     const fullName = `${(form.first_name || '').trim()} ${(form.last_name || '').trim()}`.trim();
     if (!fullName) return 'First name and last name are required.';
@@ -91,8 +87,6 @@ export const AdminUsersPage: React.FC = () => {
     if (!/^\d{10}$/.test(form.phone.trim())) return 'Phone must be exactly 10 digits.';
     if (!form.status.trim()) return 'Status is required.';
     if (!form.role || !['admin', 'trainer', 'office'].includes(form.role)) return 'Role is required.';
-    if (requirePassword && (!password || password.length < 6)) return 'Password must be at least 6 characters.';
-    if (password && password.length > 0 && password.length < 6) return 'Password must be at least 6 characters.';
     return null;
   };
 
@@ -107,14 +101,11 @@ export const AdminUsersPage: React.FC = () => {
     return () => clearTimeout(t);
   }, [currentPage, searchTerm, roleFilter, statusFilter]);
 
-  const createError = useMemo(() => validateUserForm(draft, true, draft.password), [draft]);
-  const editError = useMemo(
-    () => (editDraft ? validateUserForm(editDraft, false, editDraft.newPassword || undefined) : null),
-    [editDraft]
-  );
+  const createError = useMemo(() => validateUserForm(draft), [draft]);
+  const editError = useMemo(() => (editDraft ? validateUserForm(editDraft) : null), [editDraft]);
 
   const handleCreate = async () => {
-    const err = validateUserForm(draft, true, draft.password);
+    const err = validateUserForm(draft);
     if (err) {
       toast.error(err);
       return;
@@ -128,7 +119,6 @@ export const AdminUsersPage: React.FC = () => {
       phone: draft.phone,
       status: draft.status,
       role: draft.role,
-      password: draft.password || undefined,
     });
     setCreating(false);
     if (!created) {
@@ -139,7 +129,7 @@ export const AdminUsersPage: React.FC = () => {
     const res = await listUsersPaged(1, PAGE_SIZE, searchTerm, roleFilter || undefined, statusFilter || undefined);
     setUsers(res.data);
     setTotalUsers(res.total);
-    setDraft({ first_name: '', last_name: '', email_local: '', phone: '', status: 'active', role: 'trainer', password: '' });
+    setDraft({ first_name: '', last_name: '', email_local: '', phone: '', status: 'active', role: 'trainer' });
     setIsCreateOpen(false);
     toast.success('User added');
   };
@@ -161,13 +151,12 @@ export const AdminUsersPage: React.FC = () => {
       phone: editingUser.phone ?? '',
       status: editingUser.status ?? 'active',
       role: editingUser.role ?? 'trainer',
-      newPassword: '',
     });
   }, [editingUser]);
 
   const handleSaveEdit = async () => {
     if (!editingId || !editDraft) return;
-    const err = validateUserForm(editDraft, false, editDraft.newPassword || undefined);
+    const err = validateUserForm(editDraft);
     if (err) {
       toast.error(err);
       return;
@@ -182,14 +171,6 @@ export const AdminUsersPage: React.FC = () => {
       status: editDraft.status,
       role: editDraft.role as 'admin' | 'trainer' | 'office',
     });
-    if (editDraft.newPassword.trim()) {
-      const pwResult = await adminSetPassword(editingId, editDraft.newPassword);
-      if (!pwResult.success) {
-        toast.error(pwResult.message);
-        setSavingEdit(false);
-        return;
-      }
-    }
     setSavingEdit(false);
     if (!updated) {
       toast.error('Failed to update user');
@@ -444,12 +425,6 @@ export const AdminUsersPage: React.FC = () => {
             options={ROLE_OPTIONS}
             label="Role"
           />
-          <Input
-            value={draft.password}
-            onChange={(e) => setDraft((p) => ({ ...p, password: e.target.value }))}
-            placeholder="Password (min 6 chars) *"
-            type="password"
-          />
           <Select
             value={draft.status}
             onChange={(v) => setDraft((p) => ({ ...p, status: v }))}
@@ -517,12 +492,6 @@ export const AdminUsersPage: React.FC = () => {
               onChange={(v) => setEditDraft((p) => (p ? { ...p, role: v } : p))}
               options={ROLE_OPTIONS}
               label="Role"
-            />
-            <Input
-              value={editDraft.newPassword}
-              onChange={(e) => setEditDraft((p) => (p ? { ...p, newPassword: e.target.value } : p))}
-              placeholder="New password (leave blank to keep current)"
-              type="password"
             />
             <Select
               value={editDraft.status}

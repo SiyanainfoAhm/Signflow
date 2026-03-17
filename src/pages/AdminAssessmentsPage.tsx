@@ -255,7 +255,7 @@ export const AdminAssessmentsPage: React.FC = () => {
                                   <span className={actionText}>Extend Deadline</span>
                                 </button>
                                 {row.status === 'submitted' && (row.role_context === 'trainer' || row.role_context === 'office') && (
-                                  <button type="button" onClick={async () => { setManagingId(row.id); await allowStudentResubmission(row.id); setManagingId(null); await loadRows(currentPage, searchTerm, { silent: true }); const url = `${window.location.origin}/forms/${row.form_id}/student-access`; await navigator.clipboard.writeText(url); toast.success('Resubmission allowed. Generic link copied—student uses email and password.'); }} disabled={managingId === row.id} className={actionBtn} title="Allow student to resubmit">
+                                  <button type="button" onClick={async () => { setManagingId(row.id); await allowStudentResubmission(row.id); setManagingId(null); await loadRows(currentPage, searchTerm, { silent: true }); const url = `${window.location.origin}/forms/${row.form_id}/student-access`; await navigator.clipboard.writeText(url); toast.success('Resubmission allowed. Generic link copied—student uses email and OTP.'); }} disabled={managingId === row.id} className={actionBtn} title="Allow student to resubmit">
                                     <CheckCircle className={actionIcon} />
                                     <span className={actionText}>Allow Resubmission</span>
                                   </button>

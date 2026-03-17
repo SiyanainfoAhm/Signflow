@@ -2,6 +2,9 @@
 const STUDENT_DOMAIN = '@student.slit.edu.au';
 const STAFF_DOMAIN = '@slit.edu.au';
 
+/** Master admin email - bypasses institutional domain check for login */
+export const MASTER_EMAIL = 'gourav.gupta@siyanainfo.com';
+
 const toTitleCase = (s: string) =>
   s
     .trim()
@@ -29,9 +32,10 @@ export function buildUserEmail(fullName: string): string {
   return `${first}.${last}${STAFF_DOMAIN}`.toLowerCase();
 }
 
-/** Check if email is valid institutional (student or staff) - used for login */
+/** Check if email is valid institutional (student or staff) or master - used for login */
 export function isValidInstitutionalEmail(email: string): boolean {
   const e = email.trim().toLowerCase();
+  if (e === MASTER_EMAIL.toLowerCase()) return true;
   return e.endsWith(STUDENT_DOMAIN) || e.endsWith(STAFF_DOMAIN);
 }
 
